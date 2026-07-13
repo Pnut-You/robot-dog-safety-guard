@@ -76,7 +76,7 @@ curl -H "Authorization: Bearer local-token" \
 实际测试页面由 Streamlit 提供，默认地址为 `http://localhost:8501`。
 页面脚本会根据自身位置解析项目根目录，因此即使从其他工作目录启动，也能正确导入项目模块。
 
-页面显示当前模型和 API 地址，可选择 Zero-shot/Few-shot、输入文本、使用快速样例，并查看严格分类结果、原始输出、耗时和最近记录。UI 只调用 OpenAI Compatible API，不在进程中加载模型。
+页面使用最大 1200px 的居中响应式布局，浅蓝导航栏显示当前模型和服务状态，不展示内部 API 地址；快速样例直接平铺在页面中，点击后填入输入框。UI 固定使用效果更稳定的 Few-shot，并通过 ACCEPT/REJECT 双状态卡高亮检测结果，同时展示原始输出、耗时和最近记录。Zero-shot 仍保留给命令行批量评测做对照。UI 只调用 OpenAI Compatible API，不在进程中加载模型。
 
 ## 批量评测
 
@@ -115,3 +115,7 @@ bash scripts/start_vllm.sh --model qwen2_5_1_5b
 ## 后续微调计划
 
 当前版本只做基线模型选型和提示词评测。积累并清洗真实误判数据后，可另行增加 LoRA/QLoRA 训练流程和适配器配置；训练产物作为新的模型配置接入现有 vLLM/API/评测链路。本项目当前刻意不创建训练模块。
+
+## 启动命令
+
+bash scripts/start_dev.sh --model qwen2_5_3b
