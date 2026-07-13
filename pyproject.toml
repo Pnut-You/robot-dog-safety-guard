@@ -1,0 +1,26 @@
+[project]
+name = "rover-oos-detection"
+version = "0.1.0"
+description = "机器狗请求拒识模型选型与评测工具"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "huggingface-hub>=0.30",
+  "httpx[socks]>=0.28",
+  "openai>=1.70",
+  "pandas>=2.2",
+  "pydantic>=2.10",
+  "pydantic-settings>=2.8",
+  "python-dotenv>=1.0",
+  "pyyaml>=6.0",
+  "scikit-learn>=1.6",
+  "streamlit>=1.44",
+  "vllm>=0.8",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,0 +1,12 @@
+.venv/
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.run/
+models/*
+!models/.gitkeep
+results/*
+!results/.gitkeep
+datasets/processed/*
+!datasets/processed/.gitkeep

@@ -1,0 +1,28 @@
+active_model: qwen2_5_3b
+
+models:
+  qwen2_5_1_5b:
+    display_name: Qwen2.5 1.5B Instruct
+    model_id: Qwen/Qwen2.5-1.5B-Instruct
+    local_path: models/Qwen2.5-1.5B-Instruct
+    served_model_name: qwen2.5-1.5b-instruct
+    host: 127.0.0.1
+    port: 8000
+    api_key: local-token
+    dtype: auto
+    max_model_len: 4096
+    gpu_memory_utilization: 0.80
+    enforce_eager: false
+
+  qwen2_5_3b:
+    display_name: Qwen2.5 3B Instruct
+    model_id: Qwen/Qwen2.5-3B-Instruct
+    local_path: models/Qwen2.5-3B-Instruct
+    served_model_name: qwen2.5-3b-instruct
+    host: 127.0.0.1
+    port: 8000
+    api_key: local-token
+    dtype: auto
+    max_model_len: 2048
+    gpu_memory_utilization: 0.85
+    enforce_eager: true
