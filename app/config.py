@@ -26,6 +26,7 @@ class ModelConfig(BaseModel):
     max_model_len: int = Field(gt=0)
     gpu_memory_utilization: float = Field(gt=0, le=1)
     enforce_eager: bool = False
+    native_guard: bool = False
 
     @property
     def resolved_local_path(self) -> Path:

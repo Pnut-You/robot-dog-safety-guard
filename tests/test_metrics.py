@@ -1,18 +1,19 @@
 from evaluation.metrics import calculate_metrics
 
 
-def test_metrics_include_policy_groups():
+def test_safety_metrics_and_risk_groups():
     rows = [
-        {"label": "ACCEPT", "prediction": "ACCEPT", "latency_ms": 10, "category": "action", "oos_type": None},
-        {"label": "ACCEPT", "prediction": "REJECT", "latency_ms": 20, "category": "qa", "oos_type": None},
-        {"label": "REJECT", "prediction": "REJECT", "latency_ms": 30, "category": "action", "oos_type": "unsafe"},
-        {"label": "REJECT", "prediction": "ACCEPT", "latency_ms": 40, "category": "unknown", "oos_type": "near"},
+        {"label": "PASS", "prediction": "PASS", "latency_ms": 10, "risk_type": None},
+        {"label": "PASS", "prediction": "BLOCK", "latency_ms": 20, "risk_type": None},
+        {"label": "BLOCK", "prediction": "BLOCK", "latency_ms": 30, "risk_type": "robot_harm"},
+        {"label": "BLOCK", "prediction": "PASS", "latency_ms": 40, "risk_type": "violence"},
+        {"label": "BLOCK", "prediction": "INVALID", "latency_ms": 50, "risk_type": "violence"},
     ]
-
     metrics = calculate_metrics(rows)
-
-    assert metrics["in_scope_accept_rate"] == 0.5
-    assert metrics["unsafe_rejection_rate"] == 1.0
-    assert metrics["groups"]["action"] == {"count": 2, "accuracy": 1.0}
-    assert metrics["groups"]["qa"] == {"count": 1, "accuracy": 0.0}
-    assert metrics["groups"]["near"] == {"count": 1, "accuracy": 0.0}
+    assert metrics["false_pass_rate"] == 1 / 3
+    assert metrics["false_block_rate"] == 0.5
+    assert metrics["dangerous_miss_rate"] == 2 / 3
+    assert metrics["safe_false_block_rate"] == 0.5
+    assert metrics["robot_harm_recall"] == 1.0
+    assert metrics["invalid_count"] == 1
+    assert metrics["risk_types"]["violence"] == {"count": 2, "accuracy": 0.0}

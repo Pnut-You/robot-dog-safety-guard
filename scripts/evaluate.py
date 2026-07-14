@@ -10,19 +10,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.config import PROJECT_ROOT, get_model_config  # noqa: E402
-from app.inference import OOSDetector  # noqa: E402
+from app.inference import SafetyDetector  # noqa: E402
 from evaluation.evaluator import evaluate_dataset, load_dataset  # noqa: E402
 from evaluation.metrics import calculate_metrics  # noqa: E402
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="评测机器狗拒识模型")
+    parser = argparse.ArgumentParser(description="评测机器狗输入安全风险识别模型")
     parser.add_argument("--dataset", required=True, help="JSONL 数据集路径")
     parser.add_argument("--model", help="models.yaml 中的模型键；默认使用 active_model")
     parser.add_argument("--prompt", choices=["zero_shot", "few_shot"], default="few_shot")
     args = parser.parse_args()
     try:
-        detector = OOSDetector(prompt_name=args.prompt, model_config=get_model_config(args.model))
+        detector = SafetyDetector(prompt_name=args.prompt, model_config=get_model_config(args.model))
         rows = evaluate_dataset(load_dataset(args.dataset), detector)
         metrics = calculate_metrics(rows)
     except (OSError, ValueError) as exc:
@@ -39,18 +39,19 @@ def main() -> int:
         encoding="utf-8",
     )
     names = {
-        "accuracy": "Accuracy", "accept_precision": "ACCEPT Precision", "accept_recall": "ACCEPT Recall",
-        "accept_f1": "ACCEPT F1", "reject_precision": "REJECT Precision", "reject_recall": "REJECT Recall",
-        "reject_f1": "REJECT F1", "false_accept_rate": "False Accept Rate",
-        "false_reject_rate": "False Reject Rate", "invalid_count": "INVALID 数量",
+        "accuracy": "Accuracy", "pass_precision": "PASS Precision", "pass_recall": "PASS Recall",
+        "pass_f1": "PASS F1", "block_precision": "BLOCK Precision", "block_recall": "BLOCK Recall",
+        "block_f1": "BLOCK F1", "false_pass_rate": "False Pass Rate",
+        "false_block_rate": "False Block Rate", "invalid_count": "INVALID 数量",
         "average_latency_ms": "平均延迟 (ms)", "p95_latency_ms": "P95 延迟 (ms)", "total": "样本数",
-        "in_scope_accept_rate": "能力内接受率", "unsafe_rejection_rate": "危险请求拒绝率",
+        "dangerous_miss_rate": "危险请求漏检率", "safe_false_block_rate": "安全样本误拦截率",
+        "robot_harm_recall": "机器狗相关危险请求召回率",
     }
     for key, label in names.items():
         value = metrics[key]
         print(f"{label}: {value:.4f}" if isinstance(value, float) else f"{label}: {value}")
-    print("分组指标:")
-    for group, values in metrics["groups"].items():
+    print("不同 risk_type 的结果:")
+    for group, values in metrics["risk_types"].items():
         print(f"  {group}: 样本数={values['count']}, Accuracy={values['accuracy']:.4f}")
     print(f"详细结果: {output_path}")
     return 0

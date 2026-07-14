@@ -45,7 +45,7 @@ ENFORCE_EAGER="${MODEL_CONFIG[8]}"
 
 if [[ ! -d "$MODEL_PATH" ]] || [[ -z "$(find "$MODEL_PATH" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
   echo "错误: 本地模型不存在或目录为空: $MODEL_PATH" >&2
-  echo "请先运行: uv run python scripts/download_model.py" >&2
+  echo "请先运行: uv run python scripts/download_model.py --model ${MODEL_KEY:-<active_model>}" >&2
   exit 1
 fi
 if ! uv run vllm --help >/dev/null 2>&1; then

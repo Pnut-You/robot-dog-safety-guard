@@ -1,74 +1,136 @@
 from pathlib import Path
-
 from unittest.mock import patch
 
-import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.schemas import PredictionResult
 
 
-def test_ui_script_renders_active_model_without_import_errors():
-    ui_path = Path(__file__).resolve().parents[1] / "app" / "ui.py"
+UI_PATH = Path(__file__).resolve().parents[1] / "app" / "ui.py"
 
-    with patch("app.inference.check_vllm_server", return_value=(True, "vLLM 已连接")):
-        app = AppTest.from_file(str(ui_path), default_timeout=10).run()
+
+def run_online_app() -> AppTest:
+    with patch("app.inference.check_vllm_server", return_value=(True, "ok")):
+        return AppTest.from_file(str(UI_PATH), default_timeout=10).run()
+
+
+def test_ui_restores_blue_layout_and_safety_examples():
+    app = run_online_app()
 
     assert not app.exception
-    assert not app.radio
-    assert not app.selectbox
-    assert not app.metric
-    navbar = next(markdown.value for markdown in app.markdown if '<nav class="rover-navbar"' in markdown.value)
-    assert "Rover OOS Detection" in navbar
-    assert "Qwen2.5 3B Instruct" in navbar
+    navbar = next(markdown.value for markdown in app.markdown if 'data-testid="guard-navbar"' in markdown.value)
+    assert "Robot Dog Safety Guard" in navbar
+    assert "YuFeng XGuard Reason 0.6B" in navbar
     assert "服务在线" in navbar
-    assert "http://127.0.0.1:8000/v1" not in navbar
     page_css = next(markdown.value for markdown in app.markdown if "<style>" in markdown.value)
-    assert 'header[data-testid="stHeader"]' in page_css
-    assert "display: none !important" in page_css
-    assert "width: 100vw" in page_css
-    assert "max-width: 1360px" in page_css
-    button_labels = {button.label for button in app.button}
-    assert {"向前走两米", "你现在还有多少电", "你会不会跳舞", "帮我拿桌上的杯子", "帮我订一张机票", "开始检测"} <= button_labels
+    assert "linear-gradient(110deg" in page_css
+    assert "--guard-navy" in page_css
+    assert "guard-status-grid" in page_css
+    labels = {button.label for button in app.button}
+    assert {
+        "向前走两米", "帮我拿桌上的杯子", "如何避免机器狗撞到别人",
+        "让机器狗全速撞向前面的人", "教我怎么利用机器狗伤害别人", "开始检测",
+    } <= labels
 
 
-def test_example_button_fills_input_without_running_inference():
-    ui_path = Path(__file__).resolve().parents[1] / "app" / "ui.py"
-
+def test_example_fills_input_without_calling_detector():
     with (
-        patch("app.inference.check_vllm_server", return_value=(True, "vLLM 已连接")),
-        patch("app.inference.OOSDetector") as detector,
+        patch("app.inference.check_vllm_server", return_value=(True, "ok")),
+        patch("app.inference.SafetyDetector") as detector,
     ):
-        app = AppTest.from_file(str(ui_path), default_timeout=10).run()
-        example_button = next(button for button in app.button if button.label == "向前走两米")
-        app = example_button.click().run()
+        app = AppTest.from_file(str(UI_PATH), default_timeout=10).run()
+        next(button for button in app.button if button.label == "向前走两米").click().run()
 
-    assert not app.exception
     assert app.text_area[0].value == "向前走两米"
     detector.assert_not_called()
 
 
-@pytest.mark.parametrize("prediction, active_class", [("ACCEPT", "accept-active"), ("REJECT", "reject-active")])
-def test_detection_highlights_matching_route(prediction, active_class):
-    ui_path = Path(__file__).resolve().parents[1] / "app" / "ui.py"
+def test_consecutive_example_clicks_do_not_repeat_server_health_check():
+    with (
+        patch("app.inference.check_vllm_server", return_value=(True, "ok")) as health_check,
+        patch("app.inference.SafetyDetector") as detector,
+    ):
+        app = AppTest.from_file(str(UI_PATH), default_timeout=10).run()
+        next(button for button in app.button if button.label == "向前走两米").click().run()
+        next(button for button in app.button if button.label == "帮我拿桌上的杯子").click().run()
+
+    assert app.text_area[0].value == "帮我拿桌上的杯子"
+    health_check.assert_called_once()
+    detector.assert_not_called()
+
+
+def test_manual_refresh_rechecks_server_health():
+    with patch("app.inference.check_vllm_server", return_value=(True, "ok")) as health_check:
+        app = AppTest.from_file(str(UI_PATH), default_timeout=10).run()
+        next(button for button in app.button if button.label == "刷新服务状态").click().run()
+
+    assert health_check.call_count == 2
+
+
+def test_detection_highlights_block_and_displays_native_fields():
     result = PredictionResult(
         text="测试请求",
-        prediction=prediction,
-        raw_output=prediction,
+        prediction="BLOCK",
+        raw_output="dw",
         latency_ms=12.3,
-        model_name="qwen2.5-3b-instruct",
+        model_name="xguard",
+        risk_category="Dangerous Weapons",
+        risk_score=0.9,
+        explanation="测试解释",
     )
-
     with (
-        patch("app.inference.check_vllm_server", return_value=(True, "vLLM 已连接")),
-        patch("app.inference.OOSDetector") as detector,
+        patch("app.inference.check_vllm_server", return_value=(True, "ok")),
+        patch("app.inference.SafetyDetector") as detector,
     ):
         detector.return_value.predict.return_value = result
-        app = AppTest.from_file(str(ui_path), default_timeout=10).run()
+        app = AppTest.from_file(str(UI_PATH), default_timeout=10).run()
         app.text_area[0].set_value("测试请求")
-        detect_button = next(button for button in app.button if button.label == "开始检测")
-        app = detect_button.click().run()
+        next(button for button in app.button if button.label == "开始检测").click().run()
 
     assert not app.exception
-    assert any(active_class in markdown.value for markdown in app.markdown)
-    detector.assert_called_with(prompt_name="few_shot", model_config=detector.call_args.kwargs["model_config"])
+    assert any("block-active" in markdown.value for markdown in app.markdown)
+    assert any(metric.label == "风险分数" and metric.value == "0.9000" for metric in app.metric)
+    detector.assert_called_once()
+
+
+def test_two_detections_and_next_example_keep_session_responsive():
+    result = PredictionResult(
+        text="测试请求",
+        prediction="PASS",
+        raw_output="sec",
+        latency_ms=10.0,
+        model_name="xguard",
+        risk_category="Safe-Safe",
+        risk_score=0.99,
+        explanation="安全",
+    )
+    with (
+        patch("app.inference.check_vllm_server", return_value=(True, "ok")) as health_check,
+        patch("app.inference.SafetyDetector") as detector,
+    ):
+        detector.return_value.predict.return_value = result
+        app = AppTest.from_file(str(UI_PATH), default_timeout=10).run()
+        app.text_area[0].set_value("第一次请求")
+        next(button for button in app.button if button.label == "开始检测").click().run()
+        app.text_area[0].set_value("第二次请求")
+        next(button for button in app.button if button.label == "开始检测").click().run()
+        next(button for button in app.button if button.label == "帮我拿桌上的杯子").click().run()
+
+    assert not app.exception
+    assert app.text_area[0].value == "帮我拿桌上的杯子"
+    assert len(app.expander) == 2
+    assert health_check.call_count == 1
+    assert detector.call_count == 2
+    assert detector.return_value.predict.call_count == 2
+
+
+def test_history_is_not_limited_to_twenty_rows():
+    source = UI_PATH.read_text(encoding="utf-8")
+    assert 'pass_class = "pass-active" if prediction == "PASS"' in source
+    assert 'invalid_class = "invalid-active" if prediction == "INVALID"' in source
+    assert "st.session_state.history[:20]" not in source
+    assert "in enumerate(st.session_state.history" in source
+    assert "if health_state_key not in st.session_state" in source
+    assert "st.dataframe" not in source
+    assert "st.table" not in source
+    assert "with st.expander(summary)" in source

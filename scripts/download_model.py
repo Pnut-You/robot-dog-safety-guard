@@ -21,11 +21,14 @@ def main() -> int:
     config = get_model_config(args.model)
     destination = config.resolved_local_path
     if destination.exists():
-        if destination.is_dir() and any(destination.iterdir()):
+        weight_files = list(destination.glob("*.safetensors")) if destination.is_dir() else []
+        if destination.is_dir() and (destination / "config.json").is_file() and weight_files:
             print(f"模型目录已存在，跳过下载: {destination}")
             return 0
-        print(f"错误: 目标路径已存在但不是非空模型目录: {destination}", file=sys.stderr)
-        return 1
+        if not destination.is_dir() or not (destination / "config.json").is_file():
+            print(f"错误: 目标路径已存在但不是可续传的模型目录: {destination}", file=sys.stderr)
+            return 1
+        print(f"检测到未完成的模型下载，将继续下载: {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     print(f"下载 {config.model_id} 到 {destination}")
     try:

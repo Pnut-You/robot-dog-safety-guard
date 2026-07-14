@@ -188,7 +188,14 @@ PY
 )"
 fi
 
-for port in 8000 "$UI_PORT"; do
+VLLM_PORT="$(uv run python - "$MODEL_KEY" <<'PY'
+import sys
+from app.config import get_model_config
+print(get_model_config(sys.argv[1]).port)
+PY
+)"
+
+for port in "$VLLM_PORT" "$UI_PORT"; do
   if ! port_is_free "$port"; then
     echo "错误: 端口 $port 被非本启动器管理的进程占用；不会自动终止该进程。" >&2
     show_port_owner "$port"

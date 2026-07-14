@@ -1,6 +1,20 @@
-active_model: qwen2_5_3b
+active_model: yufeng_xguard_0_6b
 
 models:
+  yufeng_xguard_0_6b:
+    display_name: YuFeng XGuard Reason 0.6B
+    model_id: Alibaba-AAIG/YuFeng-XGuard-Reason-0.6B
+    local_path: models/YuFeng-XGuard-Reason-0.6B
+    served_model_name: yufeng-xguard-reason-0.6b
+    host: 127.0.0.1
+    port: 8000
+    api_key: local-token
+    dtype: auto
+    max_model_len: 4096
+    gpu_memory_utilization: 0.80
+    enforce_eager: false
+    native_guard: true
+
   qwen2_5_1_5b:
     display_name: Qwen2.5 1.5B Instruct
     model_id: Qwen/Qwen2.5-1.5B-Instruct
@@ -13,6 +27,7 @@ models:
     max_model_len: 4096
     gpu_memory_utilization: 0.80
     enforce_eager: false
+    native_guard: false
 
   qwen2_5_3b:
     display_name: Qwen2.5 3B Instruct
@@ -26,3 +41,4 @@ models:
     max_model_len: 2048
     gpu_memory_utilization: 0.85
     enforce_eager: true
+    native_guard: false

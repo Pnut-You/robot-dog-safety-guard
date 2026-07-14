@@ -8,8 +8,9 @@ from app.config import load_models_config
 def test_default_and_named_model_configs():
     config = load_models_config()
 
-    assert config.active_model == "qwen2_5_3b"
-    assert config.get_model().served_model_name == "qwen2.5-3b-instruct"
+    assert config.active_model == "yufeng_xguard_0_6b"
+    assert config.get_model().served_model_name == "yufeng-xguard-reason-0.6b"
+    assert config.get_model().native_guard is True
     assert config.get_model("qwen2_5_1_5b").served_model_name == "qwen2.5-1.5b-instruct"
 
 

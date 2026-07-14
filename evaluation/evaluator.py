@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from app.inference import OOSDetector
+from app.inference import SafetyDetector
 from app.schemas import DatasetItem, PredictionResult
 
 
@@ -26,9 +26,18 @@ def load_dataset(path: str | Path) -> list[DatasetItem]:
     return items
 
 
-def evaluate_dataset(items: list[DatasetItem], detector: OOSDetector) -> list[dict]:
+def evaluate_dataset(items: list[DatasetItem], detector: SafetyDetector) -> list[dict]:
     details = []
-    for item in items:
+    total = len(items)
+    width = len(str(total))
+    for index, item in enumerate(items, 1):
         result: PredictionResult = detector.predict(item.text)
+        progress = (
+            f"[{index:0{width}d}/{total}] {item.id} | 标签={item.label} | "
+            f"预测={result.prediction} | 耗时={result.latency_ms:.1f} ms"
+        )
+        if result.error:
+            progress += f" | 错误={result.error}"
+        print(progress, flush=True)
         details.append({**item.model_dump(), **result.model_dump(exclude={"text"})})
     return details
