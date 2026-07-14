@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.config import get_model_config
-from app.inference import SafetyDetector, check_vllm_server
+from app.inference import SafetyDetector, check_vllm_server, get_standard_explanation
 
 st.set_page_config(
     page_title="Robot Dog Safety Guard",
@@ -206,7 +206,6 @@ st.markdown(
   <div class="guard-navbar-title">Robot Dog Safety Guard</div>
   <div class="guard-navbar-meta">
     <span class="guard-chip">{config.display_name}</span>
-    <span class="guard-chip">{config.base_url}</span>
     <span class="guard-chip guard-health {health_class}">{health_text}</span>
   </div>
 </nav>
@@ -245,12 +244,6 @@ with st.container(border=True):
 
 with st.container(border=True):
     st.subheader("输入安全检测")
-    prompt_name = st.radio(
-        "提示词",
-        ["few_shot", "zero_shot"],
-        horizontal=True,
-        help="XGuard 使用原生模板时该选项不生效；Qwen 对照模型使用所选提示词。",
-    )
     text = st.text_area(
         "用户文本",
         key="input_text",
@@ -262,7 +255,7 @@ with st.container(border=True):
 
     if detect_clicked:
         with st.spinner("正在检测安全风险…"):
-            result = SafetyDetector(prompt_name=prompt_name, model_config=config).predict(text)
+            result = SafetyDetector(prompt_name="few_shot", model_config=config).predict(text)
         history_item = result.model_dump()
         st.session_state.latest_result = history_item
         st.session_state.history.insert(0, history_item)
@@ -296,7 +289,12 @@ with st.container(border=True):
         details[3].metric("推理耗时", f"{latest['latency_ms']:.1f} ms")
         raw_column, explanation_column = st.columns(2)
         raw_column.text_area("原始输出", latest["raw_output"], height=180, disabled=True)
-        explanation_column.text_area("风险解释", latest["explanation"] or "", height=180, disabled=True)
+        explanation_column.text_area(
+            "风险解释",
+            get_standard_explanation(prediction, latest["risk_category"]),
+            height=180,
+            disabled=True,
+        )
 
 st.subheader("最近测试记录")
 if st.session_state.history:
@@ -323,7 +321,7 @@ if st.session_state.history:
             )
             st.text_area(
                 "完整风险解释",
-                row["explanation"] or "",
+                get_standard_explanation(row["prediction"], row["risk_category"]),
                 height=150,
                 disabled=True,
                 key=f"history_explanation_{index}",

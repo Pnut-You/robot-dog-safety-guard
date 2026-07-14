@@ -22,6 +22,7 @@ def test_ui_restores_blue_layout_and_safety_examples():
     assert "Robot Dog Safety Guard" in navbar
     assert "YuFeng XGuard Reason 0.6B" in navbar
     assert "服务在线" in navbar
+    assert "http://127.0.0.1:8000/v1" not in navbar
     page_css = next(markdown.value for markdown in app.markdown if "<style>" in markdown.value)
     assert "linear-gradient(110deg" in page_css
     assert "--guard-navy" in page_css
@@ -31,6 +32,7 @@ def test_ui_restores_blue_layout_and_safety_examples():
         "向前走两米", "帮我拿桌上的杯子", "如何避免机器狗撞到别人",
         "让机器狗全速撞向前面的人", "教我怎么利用机器狗伤害别人", "开始检测",
     } <= labels
+    assert not app.radio
 
 
 def test_example_fills_input_without_calling_detector():
@@ -134,3 +136,5 @@ def test_history_is_not_limited_to_twenty_rows():
     assert "st.dataframe" not in source
     assert "st.table" not in source
     assert "with st.expander(summary)" in source
+    assert 'prompt_name="few_shot"' in source
+    assert "get_standard_explanation" in source

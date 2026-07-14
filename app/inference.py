@@ -14,35 +14,35 @@ from app.schemas import PredictionResult
 # YuFeng-XGuard native one-token taxonomy. ``sec`` is the only safe label;
 # every other documented taxonomy token represents a risk.
 RISK_CATEGORIES = {
-    "sec": "Safe-Safe",
-    "pc": "Crimes and Illegal Activities-Pornographic Contraband",
-    "dc": "Crimes and Illegal Activities-Drug Crimes",
-    "dw": "Crimes and Illegal Activities-Dangerous Weapons",
-    "pi": "Crimes and Illegal Activities-Property Infringement",
-    "ec": "Crimes and Illegal Activities-Economic Crimes",
-    "ac": "Hate Speech-Abusive Curses",
-    "def": "Hate Speech-Defamation",
-    "ti": "Hate Speech-Threats and Intimidation",
-    "cy": "Hate Speech-Cyberbullying",
-    "ph": "Physical and Mental Health-Physical Health",
-    "mh": "Physical and Mental Health-Mental Health",
-    "se": "Ethics and Morality-Social Ethics",
-    "sci": "Ethics and Morality-Science Ethics",
-    "pp": "Data Privacy-Personal Privacy",
-    "cs": "Data Privacy-Commercial Secret",
-    "acc": "Cybersecurity-Access Control",
-    "mc": "Cybersecurity-Malicious Code",
-    "ha": "Cybersecurity-Hacker Attack",
-    "ps": "Cybersecurity-Physical Security",
-    "ter": "Extremism-Violent Terrorist Activities",
-    "sd": "Extremism-Social Disruption",
-    "ext": "Extremism-Extremist Ideological Trends",
-    "fin": "Inappropriate Suggestions-Finance",
-    "med": "Inappropriate Suggestions-Medicine",
-    "law": "Inappropriate Suggestions-Law",
-    "cm": "Risks Involving Minors-Corruption of Minors",
-    "ma": "Risks Involving Minors-Minor Abuse and Exploitation",
-    "md": "Risks Involving Minors-Minor Delinquency",
+    "sec": "安全",
+    "pc": "违法犯罪－色情违禁品",
+    "dc": "违法犯罪－毒品犯罪",
+    "dw": "违法犯罪－危险武器",
+    "pi": "违法犯罪－财产侵害",
+    "ec": "违法犯罪－经济犯罪",
+    "ac": "仇恨言论－辱骂诅咒",
+    "def": "仇恨言论－诽谤",
+    "ti": "仇恨言论－威胁恐吓",
+    "cy": "仇恨言论－网络欺凌",
+    "ph": "身心健康－身体健康",
+    "mh": "身心健康－心理健康",
+    "se": "伦理道德－社会伦理",
+    "sci": "伦理道德－科学伦理",
+    "pp": "数据隐私－个人隐私",
+    "cs": "数据隐私－商业秘密",
+    "acc": "网络安全－访问控制",
+    "mc": "网络安全－恶意代码",
+    "ha": "网络安全－黑客攻击",
+    "ps": "网络安全－物理安全",
+    "ter": "极端主义－暴力恐怖活动",
+    "sd": "极端主义－社会秩序破坏",
+    "ext": "极端主义－极端思想倾向",
+    "fin": "不当建议－金融",
+    "med": "不当建议－医疗",
+    "law": "不当建议－法律",
+    "cm": "未成年人风险－腐化未成年人",
+    "ma": "未成年人风险－虐待与剥削",
+    "md": "未成年人风险－违法失范",
 }
 
 
@@ -71,6 +71,15 @@ def parse_guard_output(raw_output: str) -> ParsedPrediction:
 
 def parse_prediction(raw_output: str) -> str:
     return parse_guard_output(raw_output).prediction
+
+
+def get_standard_explanation(prediction: str, risk_category: str | None) -> str:
+    if prediction == "PASS":
+        return "未检测到明显安全风险，该请求可以进入后续处理流程。"
+    if prediction == "BLOCK":
+        category = risk_category or "未知类别"
+        return f"检测到“{category}”相关安全风险，建议拦截该请求。"
+    return "模型输出无法解析或服务异常，无法完成安全判断。"
 
 
 def check_vllm_server(config: ModelConfig, timeout: float = 3.0) -> tuple[bool, str]:
