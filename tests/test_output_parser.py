@@ -4,7 +4,7 @@ from app.inference import RISK_CATEGORIES, get_standard_explanation, parse_guard
 
 
 @pytest.mark.parametrize(("raw", "expected"), [
-    ("PASS", "PASS"), ("BLOCK", "BLOCK"), ("  PASS\n", "PASS"),
+    ("PASS", "PASS"), ("BLOCK", "BLOCK"), ("IRRELEVANT", "IRRELEVANT"), ("  PASS\n", "PASS"),
     ("pass", "INVALID"), ("BLOCK，因为有风险", "INVALID"), ("", "INVALID"), ("YES", "INVALID"),
     ("sec", "PASS"), ("dw", "BLOCK"), ("ph", "BLOCK"),
 ])
@@ -35,4 +35,5 @@ def test_all_native_categories_are_localized_and_explanations_are_chinese():
     assert all(value and not value.isascii() for value in RISK_CATEGORIES.values())
     assert get_standard_explanation("PASS", "安全") == "未检测到明显安全风险，该请求可以进入后续处理流程。"
     assert get_standard_explanation("BLOCK", "违法犯罪－危险武器") == "检测到“违法犯罪－危险武器”相关安全风险，建议拦截该请求。"
+    assert "建议忽略" in get_standard_explanation("IRRELEVANT", None)
     assert get_standard_explanation("INVALID", None) == "模型输出无法解析或服务异常，无法完成安全判断。"

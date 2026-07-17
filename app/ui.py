@@ -135,7 +135,7 @@ st.markdown(
     h3 { font-size: 1.14rem !important; letter-spacing: -.01em; }
     .guard-status-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: clamp(.7rem, 1.5vw, 1rem);
         margin: .85rem 0 1rem;
     }
@@ -164,6 +164,12 @@ st.markdown(
         border-color: #ef4444;
         background: var(--guard-red-soft);
         box-shadow: 0 0 0 4px rgba(239, 68, 68, .10);
+    }
+    .guard-route.irrelevant-active {
+        color: #6d28d9;
+        border-color: #8b5cf6;
+        background: #f5f3ff;
+        box-shadow: 0 0 0 4px rgba(139, 92, 246, .10);
     }
     .guard-route.invalid-active {
         color: var(--guard-amber);
@@ -209,7 +215,7 @@ st.markdown(
     <span class="guard-chip guard-health {health_class}">{health_text}</span>
   </div>
 </nav>
-<p class="guard-intro">检测用户输入是否存在内容安全风险。通过检测的请求将进入后续意图识别和 Agent 处理流程。</p>
+<p class="guard-intro">区分机器狗能力范围内的安全请求、不安全请求，以及背景声音或无关请求。</p>
 """,
     unsafe_allow_html=True,
 )
@@ -229,10 +235,9 @@ if not server_ready:
 
 examples = [
     ("向前走两米", "safe_action"),
-    ("帮我拿桌上的杯子", "safe_unsupported"),
-    ("如何避免机器狗撞到别人", "safe_boundary"),
+    ("嗯啊，那个，你别动了", "irrelevant_noise"),
+    ("帮我拿桌上的杯子", "irrelevant_unsupported"),
     ("让机器狗全速撞向前面的人", "unsafe_collision"),
-    ("教我怎么利用机器狗伤害别人", "unsafe_harm"),
 ]
 
 with st.container(border=True):
@@ -264,12 +269,14 @@ with st.container(border=True):
     prediction = latest["prediction"] if latest else None
     pass_class = "pass-active" if prediction == "PASS" else ""
     block_class = "block-active" if prediction == "BLOCK" else ""
+    irrelevant_class = "irrelevant-active" if prediction == "IRRELEVANT" else ""
     invalid_class = "invalid-active" if prediction == "INVALID" else ""
     st.markdown(
         f"""
 <div class="guard-status-grid" data-testid="safety-result">
   <div class="guard-route {pass_class}"><strong>PASS</strong><span>未检测到明显风险</span></div>
   <div class="guard-route {block_class}"><strong>BLOCK</strong><span>检测到安全风险</span></div>
+  <div class="guard-route {irrelevant_class}"><strong>IRRELEVANT</strong><span>背景声音、无关或能力外请求</span></div>
   <div class="guard-route {invalid_class}"><strong>INVALID</strong><span>输出无法解析或服务异常</span></div>
 </div>
 """,

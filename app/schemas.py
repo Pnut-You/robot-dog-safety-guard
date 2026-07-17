@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class PredictionResult(BaseModel):
     text: str
-    prediction: Literal["PASS", "BLOCK", "INVALID"]
+    prediction: Literal["PASS", "BLOCK", "IRRELEVANT", "INVALID"]
     raw_output: str
     latency_ms: float = Field(ge=0)
     model_name: str
@@ -19,7 +19,7 @@ class DatasetItem(BaseModel):
     model_config = ConfigDict(extra="allow")
     id: str = Field(min_length=1)
     text: str = Field(min_length=1)
-    label: Literal["PASS", "BLOCK"]
+    label: Literal["PASS", "BLOCK", "IRRELEVANT"]
     category: str = Field(min_length=1)
     risk_type: str | None = None
     difficulty: str = Field(min_length=1)

@@ -56,7 +56,7 @@ class ParsedPrediction:
 def parse_guard_output(raw_output: str) -> ParsedPrediction:
     """Parse either standardized labels or XGuard's documented native output."""
     normalized = raw_output.strip()
-    if normalized in {"PASS", "BLOCK"}:
+    if normalized in {"PASS", "BLOCK", "IRRELEVANT"}:
         return ParsedPrediction(normalized)
     match = re.fullmatch(r"([a-z]+)(?:\s*<explanation>\s*(.*?)(?:\s*</explanation>)?)?", normalized, re.DOTALL)
     if not match or match.group(1) not in RISK_CATEGORIES:
@@ -79,6 +79,8 @@ def get_standard_explanation(prediction: str, risk_category: str | None) -> str:
     if prediction == "BLOCK":
         category = risk_category or "未知类别"
         return f"检测到“{category}”相关安全风险，建议拦截该请求。"
+    if prediction == "IRRELEVANT":
+        return "输入与机器狗能力无关、来自背景声音或无法识别为有效请求，建议忽略。"
     return "模型输出无法解析或服务异常，无法完成安全判断。"
 
 

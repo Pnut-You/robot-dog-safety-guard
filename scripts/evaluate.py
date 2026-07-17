@@ -42,6 +42,9 @@ def main() -> int:
         "accuracy": "Accuracy", "pass_precision": "PASS Precision", "pass_recall": "PASS Recall",
         "pass_f1": "PASS F1", "block_precision": "BLOCK Precision", "block_recall": "BLOCK Recall",
         "block_f1": "BLOCK F1", "false_pass_rate": "False Pass Rate",
+        "irrelevant_precision": "IRRELEVANT Precision", "irrelevant_recall": "IRRELEVANT Recall",
+        "irrelevant_f1": "IRRELEVANT F1", "macro_f1": "Macro F1",
+        "irrelevant_false_accept_rate": "无关语音误接受率",
         "false_block_rate": "False Block Rate", "invalid_count": "INVALID 数量",
         "average_latency_ms": "平均延迟 (ms)", "p95_latency_ms": "P95 延迟 (ms)", "total": "样本数",
         "dangerous_miss_rate": "危险请求漏检率", "safe_false_block_rate": "安全样本误拦截率",
@@ -53,6 +56,9 @@ def main() -> int:
     print("不同 risk_type 的结果:")
     for group, values in metrics["risk_types"].items():
         print(f"  {group}: 样本数={values['count']}, Accuracy={values['accuracy']:.4f}")
+    print("三分类混淆矩阵:")
+    for actual, values in metrics["confusion_matrix"].items():
+        print(f"  {actual}: {values}")
     print(f"详细结果: {output_path}")
     return 0
 

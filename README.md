@@ -1,8 +1,8 @@
 # robot-dog-safety-guard
 
-机器狗输入安全风险识别模型的本地部署、交互测试与批量评测项目。系统只判断输入内容是否安全：`PASS` 表示未检测到明显风险，`BLOCK` 表示需要拦截，无法解析或服务异常记为 `INVALID`。功能支持、联网需求、意图分类、Agent 路由以及最终运动与环境校验不在本模块范围内。
+机器狗请求分类与安全拒识模型的本地部署、交互测试和批量评测项目。`PASS` 表示能力范围内且安全，`BLOCK` 表示存在安全风险，`IRRELEVANT` 表示背景声音、无关内容或能力范围外请求；无法解析或服务异常记为 `INVALID`。
 
-项目使用 uv 管理 Python 3.12 环境，使用 vLLM 提供 OpenAI Compatible API，并由 Streamlit 提供测试页面。默认模型是 `Alibaba-AAIG/YuFeng-XGuard-Reason-0.6B`，同时保留 Qwen2.5 1.5B 与 3B 作为提示词对照模型。
+项目使用 uv 管理 Python 3.12 环境，使用 vLLM 提供 OpenAI Compatible API，并由 Streamlit 提供测试页面。默认模型是 `Alibaba-AAIG/YuFeng-XGuard-Reason-0.6B`，同时保留 Qwen2.5 1.5B、3B 和适合 8GB 显存测试的 Qwen3 4B Instruct 2507 AWQ 4-bit 作为提示词对照模型。
 
 ## 项目结构
 
@@ -53,7 +53,7 @@ ROVER_MODEL_KEY=yufeng_xguard_0_6b uv run streamlit run app/ui.py
 
 XGuard 原生输出首 token 是风险分类代码：`sec` 代表安全，其余官方分类代码（例如危险武器 `dw`）代表风险。项目将 `sec` 映射为 `PASS`，其他已知分类映射为 `BLOCK`；未知或混杂格式映射为 `INVALID`。若输出包含 `<explanation>...</explanation>` 则保留解释；达到生成上限时也会保留截断解释，但只要首行分类代码完整，结论仍可解析。风险分数取 vLLM 返回的首 token 概率。API 未返回相应信息时字段为空，不作推测。完整原始输出始终保留。
 
-Qwen 对照模型使用 `app/prompts.py` 的 Zero-shot/Few-shot 安全提示词，只接受完整 `PASS` 或 `BLOCK`。
+Qwen 对照模型使用 `app/prompts.py` 的 Zero-shot/Few-shot 提示词，只接受完整 `PASS`、`BLOCK` 或 `IRRELEVANT`。XGuard 原生协议没有无关类别，因此评测三分类时会把安全的无关输入输出为 `PASS`，建议优先使用 Qwen3。
 
 ## 批量评测
 
@@ -63,9 +63,36 @@ uv run python scripts/evaluate.py \
   --dataset datasets/raw/sample_safety.jsonl
 ```
 
-数据集共 120 条，PASS/BLOCK 各 60 条。安全侧覆盖动作、机器狗问答、文本任务、外部工具请求、不支持但安全的动作和敏感词边界讨论；风险侧覆盖暴力、自残、犯罪、危险物品、机器狗伤人、安全绕过和危险机器人行为。
+数据集共 1000 条：PASS 350、BLOCK 350、IRRELEVANT 300。覆盖动作控制、机器狗问答、机器狗相关危险请求、一般内容风险、语气词、旁人对话、电视电话声音、ASR 碎片、能力范围外请求和带背景杂音的有效请求。可用 `uv run python scripts/generate_sample_dataset.py` 按固定规则重建并校验数据。
 
-命令输出 Accuracy、PASS/BLOCK Precision/Recall/F1、False Pass/Block Rate、INVALID 数量、平均与 P95 延迟、各 risk_type 指标，并重点报告危险请求漏检率、安全样本误拦截率和机器狗相关危险请求召回率。详情保存到 `results/<模型名>_<时间>.json`。
+命令输出 Accuracy、三类 Precision/Recall/F1、Macro F1、混淆矩阵、无关语音误接受率、危险请求漏检率、INVALID 数量和延迟指标。详情保存到 `results/<模型名>_<时间>.json`。
+
+### 使用 Qwen3 4B Instruct 2507 AWQ
+
+RTX 4060 Ti 8GB 无法为约 8.06GB 的官方 BF16 权重留出足够的 vLLM 运行和 KV cache 空间，因此项目使用基于该模型的 AWQ 4-bit 版本：
+
+```bash
+uv run python scripts/download_model.py --model qwen3_4b_instruct_2507_awq
+bash scripts/start_vllm.sh --model qwen3_4b_instruct_2507_awq
+```
+
+在新终端检查服务并启动 UI：
+
+```bash
+uv run python scripts/check_server.py --model qwen3_4b_instruct_2507_awq
+ROVER_MODEL_KEY=qwen3_4b_instruct_2507_awq uv run streamlit run app/ui.py
+```
+
+使用项目数据集评测：
+
+```bash
+uv run python scripts/evaluate.py \
+  --model qwen3_4b_instruct_2507_awq \
+  --dataset datasets/raw/sample_safety.jsonl \
+  --prompt few_shot
+```
+
+Qwen3 是通用指令模型，使用项目的三分类提示词，输出严格解析为 `PASS`、`BLOCK`、`IRRELEVANT` 或 `INVALID`。详细结果写入 `results/`。
 
 ## 增加和切换模型
 

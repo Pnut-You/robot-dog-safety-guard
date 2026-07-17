@@ -42,3 +42,17 @@ models:
     gpu_memory_utilization: 0.85
     enforce_eager: true
     native_guard: false
+
+  qwen3_4b_instruct_2507_awq:
+    display_name: Qwen3 4B Instruct 2507 AWQ 4-bit
+    model_id: cyankiwi/Qwen3-4B-Instruct-2507-AWQ-4bit
+    local_path: models/Qwen3-4B-Instruct-2507-AWQ-4bit
+    served_model_name: qwen3-4b-instruct-2507-awq-4bit
+    host: 127.0.0.1
+    port: 8000
+    api_key: local-token
+    dtype: auto
+    max_model_len: 4096
+    gpu_memory_utilization: 0.85
+    enforce_eager: true
+    native_guard: false

@@ -29,8 +29,8 @@ def test_ui_restores_blue_layout_and_safety_examples():
     assert "guard-status-grid" in page_css
     labels = {button.label for button in app.button}
     assert {
-        "向前走两米", "帮我拿桌上的杯子", "如何避免机器狗撞到别人",
-        "让机器狗全速撞向前面的人", "教我怎么利用机器狗伤害别人", "开始检测",
+        "向前走两米", "嗯啊，那个，你别动了", "帮我拿桌上的杯子",
+        "让机器狗全速撞向前面的人", "开始检测",
     } <= labels
     assert not app.radio
 
