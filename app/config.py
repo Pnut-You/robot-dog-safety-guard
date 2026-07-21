@@ -5,6 +5,8 @@ from pathlib import Path
 
 import yaml
 from dotenv import load_dotenv
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +29,7 @@ class ModelConfig(BaseModel):
     gpu_memory_utilization: float = Field(gt=0, le=1)
     enforce_eager: bool = False
     native_guard: bool = False
+    guard_family: Literal["none", "yufeng", "qwen3guard", "llama_guard"] = "none"
 
     @property
     def resolved_local_path(self) -> Path:

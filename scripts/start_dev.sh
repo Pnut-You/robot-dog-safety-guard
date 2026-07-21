@@ -15,11 +15,13 @@ usage() {
   cat <<'EOF'
 用法:
   bash scripts/start_dev.sh [start] [--model <配置键>]
+  bash scripts/start_dev.sh switch --model <配置键>
   bash scripts/start_dev.sh restart [--model <配置键>]
   bash scripts/start_dev.sh status
   bash scripts/start_dev.sh stop
 
-省略子命令时等同于 start；重复 start 会优雅重启现有实例。
+省略子命令时等同于 start；start、restart 和 switch 都会优雅停止本项目的现有实例。
+switch 必须明确指定目标模型，并在停止旧服务前验证新模型完整性。
 EOF
 }
 
@@ -28,13 +30,18 @@ if [[ $# -gt 0 && "$1" != --* ]]; then
   shift
 fi
 case "$ACTION" in
-  start|restart)
+  start|restart|switch)
     if [[ $# -gt 0 ]]; then
       if [[ $# -ne 2 || "$1" != "--model" || -z "$2" ]]; then
         usage >&2
         exit 2
       fi
       MODEL_KEY="$2"
+    fi
+    if [[ "$ACTION" == "switch" && -z "$MODEL_KEY" ]]; then
+      echo "错误: switch 必须使用 --model <配置键> 指定目标模型。" >&2
+      usage >&2
+      exit 2
     fi
     ;;
   status|stop)
@@ -177,9 +184,6 @@ if [[ "$ACTION" == "stop" ]]; then
   exit $?
 fi
 
-# Repeated start and explicit restart share the same safe restart behavior.
-stop_service true
-
 if [[ -z "$MODEL_KEY" ]]; then
   MODEL_KEY="$(uv run python - <<'PY'
 from app.config import load_models_config
@@ -188,12 +192,50 @@ PY
 )"
 fi
 
-VLLM_PORT="$(uv run python - "$MODEL_KEY" <<'PY'
+mapfile -t TARGET_CONFIG < <(uv run python - "$MODEL_KEY" <<'PY'
+import json
 import sys
 from app.config import get_model_config
-print(get_model_config(sys.argv[1]).port)
+c = get_model_config(sys.argv[1])
+p = c.resolved_local_path
+errors = []
+if not p.is_dir():
+    errors.append(f"模型目录不存在: {p}")
+elif not (p / "config.json").is_file():
+    errors.append(f"模型配置不存在: {p / 'config.json'}")
+else:
+    index_files = [p / "model.safetensors.index.json", p / "pytorch_model.bin.index.json"]
+    index_file = next((item for item in index_files if item.is_file()), None)
+    if index_file:
+        try:
+            names = set(json.loads(index_file.read_text(encoding="utf-8"))["weight_map"].values())
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            errors.append(f"无法解析权重索引 {index_file}: {exc}")
+        else:
+            missing = sorted(name for name in names if not (p / name).is_file())
+            if missing:
+                errors.append(f"缺少 {len(missing)} 个权重分片: {', '.join(missing[:3])}")
+    elif not any(p.glob("*.safetensors")) and not any(p.glob("pytorch_model*.bin")):
+        errors.append(f"模型权重不存在: {p}")
+if errors:
+    print("错误: 目标模型不完整；不会停止当前服务。", file=sys.stderr)
+    for error in errors:
+        print(f"  - {error}", file=sys.stderr)
+    print(f"请先运行: uv run python scripts/download_model.py --model {sys.argv[1]}", file=sys.stderr)
+    raise SystemExit(1)
+print(c.port)
+print(c.resolved_local_path)
 PY
-)"
+)
+if [[ ${#TARGET_CONFIG[@]} -ne 2 ]]; then
+  echo "错误: 目标模型预检失败；不会停止当前服务。" >&2
+  exit 1
+fi
+VLLM_PORT="${TARGET_CONFIG[0]}"
+echo "目标模型预检通过: $MODEL_KEY (${TARGET_CONFIG[1]})"
+
+# Validate the target first, then stop only the supervisor owned by this project.
+stop_service true
 
 for port in "$VLLM_PORT" "$UI_PORT"; do
   if ! port_is_free "$port"; then

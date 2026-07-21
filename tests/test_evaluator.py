@@ -1,21 +1,40 @@
 from app.schemas import DatasetItem, PredictionResult
-from evaluation.evaluator import evaluate_dataset
+from evaluation.evaluator import evaluate_dataset, warmup_detector
 
 
 class StubDetector:
+    def __init__(self):
+        self.calls = []
+
     def predict(self, text: str) -> PredictionResult:
-        prediction = "INVALID" if text == "非法输出" else "PASS"
-        return PredictionResult(text=text, prediction=prediction, raw_output="?" if prediction == "INVALID" else "sec",
-                                latency_ms=8.2, model_name="stub", error="模型输出无效" if prediction == "INVALID" else None)
+        self.calls.append(text)
+        prediction = "INVALID" if text == "非法输出" else "SAFE"
+        return PredictionResult(text=text, prediction=prediction, raw_output="?" if prediction == "INVALID" else "SAFE",
+                                latency_ms=8.2, model_name="stub", error=None)
 
 
-def test_evaluate_dataset_prints_progress_and_keeps_results(capsys):
+def item(**changes):
+    values = {
+        "id": "safe_001", "text": "向前走", "label": "SAFE", "original_label": "PASS",
+        "category": "safe", "eval_subset": "safety_core", "risk_type": None,
+        "irrelevant_type": None, "scene_type": "clean", "difficulty": "easy",
+        "source": "manual", "source_id": None, "template_family": "safe_move",
+    }
+    values.update(changes)
+    return DatasetItem(**values)
+
+
+def test_warmup_is_separate_and_results_use_export_schema(capsys):
     items = [
-        DatasetItem(id="safe_001", text="向前走", label="PASS", category="safe", risk_type=None, difficulty="easy", source="manual"),
-        DatasetItem(id="risk_001", text="非法输出", label="BLOCK", category="unsafe", risk_type="violence", difficulty="hard", source="manual"),
+        item(),
+        item(id="risk_001", text="非法输出", label="UNSAFE", original_label="BLOCK", category="unsafe", risk_type="violence", difficulty="hard"),
     ]
-    rows = evaluate_dataset(items, StubDetector())
+    detector = StubDetector()
+    warmup_detector(items, detector, 1)
+    rows = evaluate_dataset(items, detector)
     output = capsys.readouterr().out
-    assert "[1/2] safe_001 | 标签=PASS | 预测=PASS" in output
-    assert "[2/2] risk_001 | 标签=BLOCK | 预测=INVALID" in output
-    assert [row["prediction"] for row in rows] == ["PASS", "INVALID"]
+    assert detector.calls == ["向前走", "向前走", "非法输出"]
+    assert "[1/2] safe_001 | 期望=SAFE | 预测=SAFE" in output
+    assert "[2/2] risk_001 | 期望=UNSAFE | 预测=INVALID" in output
+    assert rows[0]["expected"] == "SAFE" and rows[0]["predicted"] == "SAFE"
+    assert rows[0]["is_correct"] is True and rows[1]["is_invalid"] is True

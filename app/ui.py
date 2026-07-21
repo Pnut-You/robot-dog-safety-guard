@@ -135,7 +135,7 @@ st.markdown(
     h3 { font-size: 1.14rem !important; letter-spacing: -.01em; }
     .guard-status-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: clamp(.7rem, 1.5vw, 1rem);
         margin: .85rem 0 1rem;
     }
@@ -153,23 +153,17 @@ st.markdown(
     }
     .guard-route strong { font-size: clamp(1.2rem, 2vw, 1.62rem); letter-spacing: .05em; }
     .guard-route span { font-size: .82rem; margin-top: .32rem; text-align: center; padding: 0 .4rem; }
-    .guard-route.pass-active {
+    .guard-route.safe-active {
         color: var(--guard-green);
         border-color: #22c55e;
         background: var(--guard-green-soft);
         box-shadow: 0 0 0 4px rgba(34, 197, 94, .10);
     }
-    .guard-route.block-active {
+    .guard-route.unsafe-active {
         color: var(--guard-red);
         border-color: #ef4444;
         background: var(--guard-red-soft);
         box-shadow: 0 0 0 4px rgba(239, 68, 68, .10);
-    }
-    .guard-route.irrelevant-active {
-        color: #6d28d9;
-        border-color: #8b5cf6;
-        background: #f5f3ff;
-        box-shadow: 0 0 0 4px rgba(139, 92, 246, .10);
     }
     .guard-route.invalid-active {
         color: var(--guard-amber);
@@ -235,8 +229,9 @@ if not server_ready:
 
 examples = [
     ("向前走两米", "safe_action"),
-    ("嗯啊，那个，你别动了", "irrelevant_noise"),
-    ("帮我拿桌上的杯子", "irrelevant_unsupported"),
+    ("嗯，啊，哦哦哦", "safe_filler"),
+    ("[噪声]", "safe_asr_noise"),
+    ("帮我拿桌上的杯子", "safe_agent_request"),
     ("让机器狗全速撞向前面的人", "unsafe_collision"),
 ]
 
@@ -267,16 +262,14 @@ with st.container(border=True):
 
     latest = st.session_state.latest_result
     prediction = latest["prediction"] if latest else None
-    pass_class = "pass-active" if prediction == "PASS" else ""
-    block_class = "block-active" if prediction == "BLOCK" else ""
-    irrelevant_class = "irrelevant-active" if prediction == "IRRELEVANT" else ""
+    safe_class = "safe-active" if prediction == "SAFE" else ""
+    unsafe_class = "unsafe-active" if prediction == "UNSAFE" else ""
     invalid_class = "invalid-active" if prediction == "INVALID" else ""
     st.markdown(
         f"""
 <div class="guard-status-grid" data-testid="safety-result">
-  <div class="guard-route {pass_class}"><strong>PASS</strong><span>未检测到明显风险</span></div>
-  <div class="guard-route {block_class}"><strong>BLOCK</strong><span>检测到安全风险</span></div>
-  <div class="guard-route {irrelevant_class}"><strong>IRRELEVANT</strong><span>背景声音、无关或能力外请求</span></div>
+  <div class="guard-route {safe_class}"><strong>SAFE</strong><span>未检测到明确安全风险</span></div>
+  <div class="guard-route {unsafe_class}"><strong>UNSAFE</strong><span>检测到明确安全风险</span></div>
   <div class="guard-route {invalid_class}"><strong>INVALID</strong><span>输出无法解析或服务异常</span></div>
 </div>
 """,
@@ -286,19 +279,14 @@ with st.container(border=True):
     if latest:
         if latest["error"]:
             st.error(latest["error"])
-        details = st.columns(4)
+        details = st.columns(2)
         details[0].metric("判断结果", prediction)
-        details[1].metric("风险类别", latest["risk_category"] or "—")
-        details[2].metric(
-            "风险分数",
-            f"{latest['risk_score']:.4f}" if latest["risk_score"] is not None else "—",
-        )
-        details[3].metric("推理耗时", f"{latest['latency_ms']:.1f} ms")
+        details[1].metric("推理耗时", f"{latest['latency_ms']:.1f} ms")
         raw_column, explanation_column = st.columns(2)
         raw_column.text_area("原始输出", latest["raw_output"], height=180, disabled=True)
         explanation_column.text_area(
             "风险解释",
-            get_standard_explanation(prediction, latest["risk_category"]),
+            get_standard_explanation(prediction, None),
             height=180,
             disabled=True,
         )
@@ -312,13 +300,9 @@ if st.session_state.history:
             f"{row['latency_ms']:.1f} ms · {row['model_name']}"
         )
         with st.expander(summary):
-            detail_columns = st.columns(3)
+            detail_columns = st.columns(2)
             detail_columns[0].metric("判断结果", row["prediction"])
-            detail_columns[1].metric("风险类别", row["risk_category"] or "—")
-            detail_columns[2].metric(
-                "风险分数",
-                f"{row['risk_score']:.4f}" if row["risk_score"] is not None else "—",
-            )
+            detail_columns[1].metric("推理耗时", f"{row['latency_ms']:.1f} ms")
             st.text_area(
                 "完整原始输出",
                 row["raw_output"],
@@ -328,7 +312,7 @@ if st.session_state.history:
             )
             st.text_area(
                 "完整风险解释",
-                get_standard_explanation(row["prediction"], row["risk_category"]),
+                get_standard_explanation(row["prediction"], None),
                 height=150,
                 disabled=True,
                 key=f"history_explanation_{index}",

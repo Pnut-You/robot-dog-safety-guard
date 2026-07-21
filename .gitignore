@@ -10,3 +10,5 @@ results/*
 !results/.gitkeep
 datasets/processed/*
 !datasets/processed/.gitkeep
+
+/datasets/raw/XGuard-Train-Open-200K/xguard_train_open_200k.jsonl

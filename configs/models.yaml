@@ -12,8 +12,39 @@ models:
     dtype: auto
     max_model_len: 4096
     gpu_memory_utilization: 0.80
-    enforce_eager: false
+    enforce_eager: true
     native_guard: true
+    guard_family: yufeng
+
+  qwen3guard_gen_0_6b:
+    display_name: Qwen3Guard Gen 0.6B
+    model_id: Qwen/Qwen3Guard-Gen-0.6B
+    local_path: models/Qwen3Guard-Gen-0.6B
+    served_model_name: qwen3guard-gen-0.6b
+    host: 127.0.0.1
+    port: 8000
+    api_key: local-token
+    dtype: auto
+    max_model_len: 4096
+    gpu_memory_utilization: 0.75
+    enforce_eager: true
+    native_guard: true
+    guard_family: qwen3guard
+
+  llama_guard_3_1b:
+    display_name: Llama Guard 3 1B
+    model_id: meta-llama/Llama-Guard-3-1B
+    local_path: models/Llama-Guard-3-1B
+    served_model_name: llama-guard-3-1b
+    host: 127.0.0.1
+    port: 8000
+    api_key: local-token
+    dtype: auto
+    max_model_len: 4096
+    gpu_memory_utilization: 0.80
+    enforce_eager: true
+    native_guard: true
+    guard_family: llama_guard
 
   qwen2_5_1_5b:
     display_name: Qwen2.5 1.5B Instruct
@@ -26,8 +57,9 @@ models:
     dtype: auto
     max_model_len: 4096
     gpu_memory_utilization: 0.80
-    enforce_eager: false
+    enforce_eager: true
     native_guard: false
+    guard_family: none
 
   qwen2_5_3b:
     display_name: Qwen2.5 3B Instruct
@@ -38,21 +70,8 @@ models:
     port: 8000
     api_key: local-token
     dtype: auto
-    max_model_len: 2048
-    gpu_memory_utilization: 0.85
+    max_model_len: 768
+    gpu_memory_utilization: 0.80
     enforce_eager: true
     native_guard: false
-
-  qwen3_4b_instruct_2507_awq:
-    display_name: Qwen3 4B Instruct 2507 AWQ 4-bit
-    model_id: cyankiwi/Qwen3-4B-Instruct-2507-AWQ-4bit
-    local_path: models/Qwen3-4B-Instruct-2507-AWQ-4bit
-    served_model_name: qwen3-4b-instruct-2507-awq-4bit
-    host: 127.0.0.1
-    port: 8000
-    api_key: local-token
-    dtype: auto
-    max_model_len: 4096
-    gpu_memory_utilization: 0.85
-    enforce_eager: true
-    native_guard: false
+    guard_family: none

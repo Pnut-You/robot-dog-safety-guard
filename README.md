@@ -1,8 +1,8 @@
 # robot-dog-safety-guard
 
-机器狗请求分类与安全拒识模型的本地部署、交互测试和批量评测项目。`PASS` 表示能力范围内且安全，`BLOCK` 表示存在安全风险，`IRRELEVANT` 表示背景声音、无关内容或能力范围外请求；无法解析或服务异常记为 `INVALID`。
+机器狗第一阶段输入安全检测模型的本地部署、交互测试和批量评测项目。`SAFE` 表示没有明确安全风险，`UNSAFE` 表示存在现实危害或危险执行意图，无法严格解析的模型输出记为 `INVALID`。第一阶段不判断业务意图、能力范围或输入是否与机器狗相关；`SAFE` 不代表可以直接执行。
 
-项目使用 uv 管理 Python 3.12 环境，使用 vLLM 提供 OpenAI Compatible API，并由 Streamlit 提供测试页面。默认模型是 `Alibaba-AAIG/YuFeng-XGuard-Reason-0.6B`，同时保留 Qwen2.5 1.5B、3B 和适合 8GB 显存测试的 Qwen3 4B Instruct 2507 AWQ 4-bit 作为提示词对照模型。
+项目使用 uv 管理 Python 3.12 环境，使用 vLLM 提供 OpenAI Compatible API，并由 Streamlit 提供测试页面。当前候选模型为 YuFeng-XGuard-Reason-0.6B、Qwen3Guard-Gen-0.6B、Llama-Guard-3-1B、Qwen2.5-1.5B-Instruct 和 Qwen2.5-3B-Instruct。
 
 ## 项目结构
 
@@ -30,9 +30,12 @@ bash scripts/start_dev.sh --model yufeng_xguard_0_6b
 
 ```bash
 bash scripts/start_dev.sh status
+bash scripts/start_dev.sh switch --model qwen3guard_gen_0_6b
 bash scripts/start_dev.sh restart --model yufeng_xguard_0_6b
 bash scripts/start_dev.sh stop
 ```
+
+推荐使用 `switch --model` 切换模型。它会先确认目标模型的配置和全部权重分片完整，再自动停止本项目上一个 vLLM/UI、释放端口和显存并加载新模型。目标模型不完整时不会停止当前服务；非本项目占用的端口也不会被自动终止。
 
 也可分别启动。在第一个终端运行：
 
@@ -49,54 +52,113 @@ ROVER_MODEL_KEY=yufeng_xguard_0_6b uv run streamlit run app/ui.py
 
 页面标题为 `Robot Dog Safety Guard`，展示判断结果、原始输出、风险类别、风险分数、风险解释、推理耗时、当前模型和最近记录。UI 只调用 vLLM API，不直接加载模型。
 
-## XGuard 输出与解析
+## 二分类输出与解析
 
-XGuard 原生输出首 token 是风险分类代码：`sec` 代表安全，其余官方分类代码（例如危险武器 `dw`）代表风险。项目将 `sec` 映射为 `PASS`，其他已知分类映射为 `BLOCK`；未知或混杂格式映射为 `INVALID`。若输出包含 `<explanation>...</explanation>` 则保留解释；达到生成上限时也会保留截断解释，但只要首行分类代码完整，结论仍可解析。风险分数取 vLLM 返回的首 token 概率。API 未返回相应信息时字段为空，不作推测。完整原始输出始终保留。
+`strict` 协议让所有候选模型使用 `app/prompts.py` 中含义一致的二分类提示词，并固定 `temperature=0`、`top_p=1`、`max_tokens=4`。解析器只接受规范化后的完整 `SAFE` 或 `UNSAFE`；原生 Guard 格式、解释文字和空输出均为 `INVALID`。
 
-Qwen 对照模型使用 `app/prompts.py` 的 Zero-shot/Few-shot 提示词，只接受完整 `PASS`、`BLOCK` 或 `IRRELEVANT`。XGuard 原生协议没有无关类别，因此评测三分类时会把安全的无关输入输出为 `PASS`，建议优先使用 Qwen3。
+`native` 协议仅支持三个专用 Guard 模型，使用模型自带的 chat template，并把官方原生结论映射成 SAFE/UNSAFE。Qwen3Guard 的 `Controversial` 按安全优先原则映射为 `UNSAFE`，原始输出和类别仍保存在逐条结果中。两套结果衡量的能力不同，必须分别查看，不能混为同一排名。
 
 ## 批量评测
 
 ```bash
 uv run python scripts/evaluate.py \
-  --model yufeng_xguard_0_6b \
-  --dataset datasets/raw/sample_safety.jsonl
+  --model qwen2_5_1_5b \
+  --protocol strict
 ```
 
-数据集共 1000 条：PASS 350、BLOCK 350、IRRELEVANT 300。覆盖动作控制、机器狗问答、机器狗相关危险请求、一般内容风险、语气词、旁人对话、电视电话声音、ASR 碎片、能力范围外请求和带背景杂音的有效请求。可用 `uv run python scripts/generate_sample_dataset.py` 按固定规则重建并校验数据。
+默认评测集为 `datasets/raw/sample_safety_binary_eval.jsonl`，共 1000 条：SAFE 600、UNSAFE 400。核心安全集 800 条（400/400）是模型排名依据；噪声鲁棒性集 200 条全部期望 SAFE。二分类文件可通过 `uv run python scripts/normalize_datasets.py --binary-eval` 从只读的 `sample_safety_new.jsonl` 无损转换，并用 `uv run python scripts/validate_jsonl.py --binary` 校验。
 
-命令输出 Accuracy、三类 Precision/Recall/F1、Macro F1、混淆矩阵、无关语音误接受率、危险请求漏检率、INVALID 数量和延迟指标。详情保存到 `results/<模型名>_<时间>.json`。
+评测默认预热 1 次且不计正式延迟，并发固定为 1。输出分别包含核心安全、噪声鲁棒性和全量补充指标；INVALID 保留在分母并计为错误。详情保存到 `results/<模型名>_binary_safety_<协议>_<时间>.json`，包含协议、数据哈希、推理参数、三部分指标和逐条结果。
 
-### 使用 Qwen3 4B Instruct 2507 AWQ
+`results/` 中缺少 `evaluation_protocol=binary_safety_v1_strict` 或 `binary_safety_v1_native` 的历史 JSON 均属于旧口径，不得与新结果直接比较。
 
-RTX 4060 Ti 8GB 无法为约 8.06GB 的官方 BF16 权重留出足够的 vLLM 运行和 KV cache 空间，因此项目使用基于该模型的 AWQ 4-bit 版本：
+### 输入安全三分类评测
+
+三分类数据集为 `datasets/raw/sample_input_safety_multiclass_eval.jsonl`，包含 SAFE 400、UNSAFE 400、IRRELEVANT 200。UNSAFE 进一步使用 `legal_risk`、`self_harm`、`harm_others`、`safety_bypass`、`dangerous_operation`、`other_unsafe` 六类风险。重新生成和验证：
 
 ```bash
-uv run python scripts/download_model.py --model qwen3_4b_instruct_2507_awq
-bash scripts/start_vllm.sh --model qwen3_4b_instruct_2507_awq
+uv run python scripts/generate_multiclass_dataset.py
+uv run python scripts/validate_jsonl.py --multiclass
 ```
 
-在新终端检查服务并启动 UI：
+模型必须输出严格 JSON，例如：
 
-```bash
-uv run python scripts/check_server.py --model qwen3_4b_instruct_2507_awq
-ROVER_MODEL_KEY=qwen3_4b_instruct_2507_awq uv run streamlit run app/ui.py
+```json
+{"label":"UNSAFE","risk_type":"harm_others"}
 ```
 
-使用项目数据集评测：
+SAFE 和 IRRELEVANT 的 `risk_type` 必须为 `null`。运行评测：
 
 ```bash
 uv run python scripts/evaluate.py \
-  --model qwen3_4b_instruct_2507_awq \
-  --dataset datasets/raw/sample_safety.jsonl \
+  --task multiclass \
+  --model qwen2_5_1_5b \
   --prompt few_shot
 ```
 
-Qwen3 是通用指令模型，使用项目的三分类提示词，输出严格解析为 `PASS`、`BLOCK`、`IRRELEVANT` 或 `INVALID`。详细结果写入 `results/`。
+多分类任务只支持统一的 strict JSON 协议，不支持 Guard 原生协议。结果保存到 `results/input_safety_multiclass/`，包含一级分类指标、六类 risk_type 指标、业务误判指标、混淆矩阵、延迟和逐条原始输出。省略 `--task` 时仍执行原有二分类评测。
+
+专用 Guard（例如 YuFeng）应另行使用原生安全检测轨道，避免把其官方风险代码误判为 JSON 格式错误：
+
+```bash
+uv run python scripts/evaluate.py \
+  --task native_safety \
+  --model yufeng_xguard_0_6b \
+  --protocol native
+```
+
+该轨道仍读取同一份 1000 条多分类文本，但只评估风险/无风险：原 `UNSAFE` 为有风险，原 `SAFE` 与 `IRRELEVANT` 合并为无风险。请求仅包含用户文本并使用模型官方 chat template；结果保存在 `results/native_safety/`。它不能衡量 `SAFE` 与 `IRRELEVANT` 路由能力，也不会强行把 YuFeng 原生代码映射为项目六类 `risk_type`，因此不得与 strict 多分类准确率放在同一排行榜中。
+
+多个模型完成同一数据哈希的评测后，可生成横向对比 JSON 和 Markdown 报告：
+
+```bash
+uv run python scripts/summarize_multiclass_results.py
+```
+
+### 五模型逐个评测
+
+单张 8GB GPU 每次只启动一个模型。下载命令如下；Llama Guard 需要先在 Hugging Face 接受 Meta 许可并在 `.env` 配置 `HF_TOKEN`：
+
+```bash
+uv run python scripts/download_model.py --model yufeng_xguard_0_6b
+uv run python scripts/download_model.py --model qwen3guard_gen_0_6b
+uv run python scripts/download_model.py --model llama_guard_3_1b
+uv run python scripts/download_model.py --model qwen2_5_1_5b
+uv run python scripts/download_model.py --model qwen2_5_3b
+```
+
+在第一终端使用对应命令一键切换；每条命令都会自动终止本项目上一个模型和 UI：
+
+```bash
+# YuFeng-XGuard-Reason-0.6B
+bash scripts/start_dev.sh switch --model yufeng_xguard_0_6b
+
+# Qwen3Guard-Gen-0.6B
+bash scripts/start_dev.sh switch --model qwen3guard_gen_0_6b
+
+# Llama-Guard-3-1B（须先完成授权下载）
+bash scripts/start_dev.sh switch --model llama_guard_3_1b
+
+# Qwen2.5-1.5B-Instruct
+bash scripts/start_dev.sh switch --model qwen2_5_1_5b
+
+# Qwen2.5-3B-Instruct
+bash scripts/start_dev.sh switch --model qwen2_5_3b
+```
+
+新终端检查服务并运行两种协议：
+
+```bash
+uv run python scripts/check_server.py --model qwen3guard_gen_0_6b
+uv run python scripts/evaluate.py --model qwen3guard_gen_0_6b --protocol strict
+uv run python scripts/evaluate.py --model qwen3guard_gen_0_6b --protocol native
+```
+
+YuFeng、Qwen3Guard 和 Llama Guard 均运行 strict/native；两个 Qwen2.5 通用模型只运行 strict。要测试下一个模型时直接执行下一条 `switch` 命令，不需要先运行 `stop` 或手动按 Ctrl+C。
 
 ## 增加和切换模型
 
-在 `configs/models.yaml` 的 `models` 下增加配置。原生 XGuard 协议模型设置 `native_guard: true`；使用项目安全提示词的通用指令模型设置为 `false`。可修改 `active_model` 切换默认模型，或向下载、检查、评测和启动脚本传入 `--model <配置键>`，代码中无需修改路径或服务名。
+在 `configs/models.yaml` 的 `models` 下增加配置。专用 Guard 模型设置 `native_guard: true` 和对应 `guard_family`；通用指令模型使用 `native_guard: false`、`guard_family: none`。可修改 `active_model`，或向各脚本传入 `--model <配置键>`。
 
 ## 显存不足与后续计划
 

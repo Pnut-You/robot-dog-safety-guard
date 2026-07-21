@@ -29,8 +29,8 @@ def test_ui_restores_blue_layout_and_safety_examples():
     assert "guard-status-grid" in page_css
     labels = {button.label for button in app.button}
     assert {
-        "向前走两米", "嗯啊，那个，你别动了", "帮我拿桌上的杯子",
-        "让机器狗全速撞向前面的人", "开始检测",
+        "向前走两米", "嗯，啊，哦哦哦", "[噪声]",
+        "帮我拿桌上的杯子", "让机器狗全速撞向前面的人", "开始检测",
     } <= labels
     assert not app.radio
 
@@ -69,16 +69,13 @@ def test_manual_refresh_rechecks_server_health():
     assert health_check.call_count == 2
 
 
-def test_detection_highlights_block_and_displays_native_fields():
+def test_detection_highlights_unsafe_and_displays_binary_result():
     result = PredictionResult(
         text="测试请求",
-        prediction="BLOCK",
-        raw_output="dw",
+        prediction="UNSAFE",
+        raw_output="UNSAFE",
         latency_ms=12.3,
         model_name="xguard",
-        risk_category="Dangerous Weapons",
-        risk_score=0.9,
-        explanation="测试解释",
     )
     with (
         patch("app.inference.check_vllm_server", return_value=(True, "ok")),
@@ -90,21 +87,19 @@ def test_detection_highlights_block_and_displays_native_fields():
         next(button for button in app.button if button.label == "开始检测").click().run()
 
     assert not app.exception
-    assert any("block-active" in markdown.value for markdown in app.markdown)
-    assert any(metric.label == "风险分数" and metric.value == "0.9000" for metric in app.metric)
+    assert any("unsafe-active" in markdown.value for markdown in app.markdown)
+    assert any(metric.label == "判断结果" and metric.value == "UNSAFE" for metric in app.metric)
+    assert not any(metric.label == "风险分数" for metric in app.metric)
     detector.assert_called_once()
 
 
 def test_two_detections_and_next_example_keep_session_responsive():
     result = PredictionResult(
         text="测试请求",
-        prediction="PASS",
-        raw_output="sec",
+        prediction="SAFE",
+        raw_output="SAFE",
         latency_ms=10.0,
         model_name="xguard",
-        risk_category="Safe-Safe",
-        risk_score=0.99,
-        explanation="安全",
     )
     with (
         patch("app.inference.check_vllm_server", return_value=(True, "ok")) as health_check,
@@ -128,7 +123,7 @@ def test_two_detections_and_next_example_keep_session_responsive():
 
 def test_history_is_not_limited_to_twenty_rows():
     source = UI_PATH.read_text(encoding="utf-8")
-    assert 'pass_class = "pass-active" if prediction == "PASS"' in source
+    assert 'safe_class = "safe-active" if prediction == "SAFE"' in source
     assert 'invalid_class = "invalid-active" if prediction == "INVALID"' in source
     assert "st.session_state.history[:20]" not in source
     assert "in enumerate(st.session_state.history" in source
