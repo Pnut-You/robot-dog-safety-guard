@@ -18,7 +18,11 @@ def main() -> int:
     parser.add_argument("--model", help="models.yaml 中的模型键；默认使用 active_model")
     args = parser.parse_args()
     load_dotenv(PROJECT_ROOT / ".env")
-    config = get_model_config(args.model)
+    try:
+        config = get_model_config(args.model)
+    except (OSError, ValueError) as exc:
+        print(f"模型配置读取失败: {exc}", file=sys.stderr)
+        return 1
     destination = config.resolved_local_path
     if destination.exists():
         if not destination.is_dir():

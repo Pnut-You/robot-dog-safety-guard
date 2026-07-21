@@ -156,6 +156,52 @@ uv run python scripts/evaluate.py --model qwen3guard_gen_0_6b --protocol native
 
 YuFeng、Qwen3Guard 和 Llama Guard 均运行 strict/native；两个 Qwen2.5 通用模型只运行 strict。要测试下一个模型时直接执行下一条 `switch` 命令，不需要先运行 `stop` 或手动按 Ctrl+C。
 
+### 服务器大模型下载、切换与评测
+
+以下四个公开模型已经配置到 `configs/models.yaml`。下载仍使用项目原有的 Hugging Face Hub `snapshot_download`，直接保存到 `models/`；公开仓库通常不需要 `HF_TOKEN`。如果服务器遇到匿名下载限流，可在 `.env` 中配置令牌，但脚本不会强制要求。
+
+```bash
+uv sync
+
+uv run python scripts/download_model.py --model yufeng_xguard_8b
+uv run python scripts/download_model.py --model qwen3guard_gen_4b
+uv run python scripts/download_model.py --model qwen3guard_gen_8b
+uv run python scripts/download_model.py --model qwen2_5_7b
+```
+
+逐个启动和评测。`switch` 会先终止本项目之前由 `start_dev.sh` 启动的 vLLM/UI，再加载目标模型；不要同时执行多条 `switch` 命令。
+
+```bash
+# YuFeng-XGuard-Reason-8B
+bash scripts/start_dev.sh switch --model yufeng_xguard_8b
+uv run python scripts/check_server.py --model yufeng_xguard_8b
+uv run python scripts/evaluate.py --task native_safety --protocol native --model yufeng_xguard_8b
+
+# Qwen3Guard-Gen-4B
+bash scripts/start_dev.sh switch --model qwen3guard_gen_4b
+uv run python scripts/check_server.py --model qwen3guard_gen_4b
+uv run python scripts/evaluate.py --task native_safety --protocol native --model qwen3guard_gen_4b
+
+# Qwen3Guard-Gen-8B
+bash scripts/start_dev.sh switch --model qwen3guard_gen_8b
+uv run python scripts/check_server.py --model qwen3guard_gen_8b
+uv run python scripts/evaluate.py --task native_safety --protocol native --model qwen3guard_gen_8b
+
+# Qwen2.5-7B-Instruct
+bash scripts/start_dev.sh switch --model qwen2_5_7b
+uv run python scripts/check_server.py --model qwen2_5_7b
+uv run python scripts/evaluate.py --task multiclass --protocol strict --prompt few_shot --model qwen2_5_7b
+```
+
+全部完成后生成双轨汇总；脚本会汇总当前数据集哈希下已经完成的模型，不要求所有已配置模型都必须存在结果：
+
+```bash
+bash scripts/start_dev.sh stop
+uv run python scripts/summarize_multiclass_results.py
+```
+
+8B 模型能否单卡运行取决于服务器显存和 vLLM/KV cache 占用。若出现显存不足，应降低对应配置的 `max_model_len` 或 `gpu_memory_utilization`，或使用具备更多显存的 GPU；不要通过修改数据集规避部署问题。
+
 ## 增加和切换模型
 
 在 `configs/models.yaml` 的 `models` 下增加配置。专用 Guard 模型设置 `native_guard: true` 和对应 `guard_family`；通用指令模型使用 `native_guard: false`、`guard_family: none`。可修改 `active_model`，或向各脚本传入 `--model <配置键>`。

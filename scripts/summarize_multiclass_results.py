@@ -13,10 +13,6 @@ DATASET = ROOT / "datasets/raw/sample_input_safety_multiclass_eval.jsonl"
 MULTICLASS_RESULTS = ROOT / "results/input_safety_multiclass"
 NATIVE_RESULTS = ROOT / "results/native_safety"
 REPORT = ROOT / "reports/input_safety_multiclass_comparison.md"
-STRICT_MODELS = ("qwen2.5-1.5b-instruct", "qwen2.5-3b-instruct")
-NATIVE_MODELS = ("yufeng-xguard-reason-0.6b", "qwen3guard-gen-0.6b")
-
-
 def _latest(directory: Path, pattern: str, protocol: str, models: tuple[str, ...], dataset_hash: str) -> dict[str, tuple[Path, dict]]:
     found: dict[str, tuple[float, Path, dict]] = {}
     for path in directory.glob(pattern):
@@ -39,15 +35,16 @@ def _pct(value: float) -> str:
 
 def main() -> None:
     dataset_hash = hashlib.sha256(DATASET.read_bytes()).hexdigest()
-    native = _latest(NATIVE_RESULTS, "*_sample_input_safety_multiclass_eval_native_*.json",
-                     "native_safety_detection_v1", NATIVE_MODELS, dataset_hash)
-    strict = _latest(MULTICLASS_RESULTS, "*_sample_input_safety_multiclass_eval_*.json",
-                     "input_safety_multiclass_v1", STRICT_MODELS, dataset_hash)
-    missing = [model for model in (*NATIVE_MODELS, *STRICT_MODELS) if model not in native and model not in strict]
-    if missing:
-        raise SystemExit(f"缺少本轮可用结果: {', '.join(missing)}")
-
     config = yaml.safe_load((ROOT / "configs/models.yaml").read_text(encoding="utf-8"))["models"]
+    native_models = tuple(value["served_model_name"] for value in config.values() if value.get("native_guard"))
+    strict_models = tuple(value["served_model_name"] for value in config.values() if not value.get("native_guard"))
+    native = _latest(NATIVE_RESULTS, "*_sample_input_safety_multiclass_eval_native_*.json",
+                     "native_safety_detection_v1", native_models, dataset_hash)
+    strict = _latest(MULTICLASS_RESULTS, "*_sample_input_safety_multiclass_eval_*.json",
+                     "input_safety_multiclass_v1", strict_models, dataset_hash)
+    if not native and not strict:
+        raise SystemExit("没有找到与当前数据集哈希和评测协议匹配的完整结果")
+
     served_to_config = {value["served_model_name"]: value for value in config.values()}
     native_rows, strict_rows = [], []
     for model, (path, payload) in native.items():
@@ -88,43 +85,46 @@ def main() -> None:
         f"- 数据集：`{comparison['dataset']}`", f"- SHA256：`{dataset_hash}`",
         "- 样本：1000（SAFE 400 / UNSAFE 400 / IRRELEVANT 200）",
         "- 推理：temperature=0 / top_p=1 / concurrency=1 / warmup=1（不计延迟）",
-        "- 部署：RTX 4060 Ti 8GB；四个模型均使用 eager 模式",
+        "- 部署参数：来自 `configs/models.yaml`，实际硬件与服务日志需随实验另行记录",
         "- 口径：专用 Guard 与项目三分类分轨展示，不跨轨道直接排名", "",
-        "## Guard 原生风险检测", "",
-        "该轨道把项目 SAFE 与 IRRELEVANT 合并为无风险，只衡量风险是否检出。", "",
-        "| 模型 | Accuracy | Macro F1 | UNSAFE Recall | 漏检率 | 误拦截率 | INVALID | 平均延迟 | P95 |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
-    for row in native_rows:
-        lines.append(f"| {row['model']} | {_pct(row['accuracy'])} | {_pct(row['macro_f1'])} | "
-                     f"{_pct(row['unsafe_recall'])} | {_pct(row['false_pass_rate'])} | "
-                     f"{_pct(row['false_block_rate'])} | {_pct(row['invalid_rate'])} | "
-                     f"{row['average_latency_ms']:.1f}ms | {row['p95_latency_ms']:.1f}ms |")
-    lines += ["", "### Guard 对项目风险场景的检出率", "",
-              "这些数值只表示是否检出风险，不表示原生风险代码能映射为项目 risk_type。", "",
-              "| 模型 | legal | self_harm | harm_others | bypass | dangerous_operation | other |",
-              "|---|---:|---:|---:|---:|---:|---:|"]
     risks = ("legal_risk", "self_harm", "harm_others", "safety_bypass", "dangerous_operation", "other_unsafe")
-    for row in native_rows:
-        cells = [_pct(row["risk_types"][risk]["unsafe_recall"]) for risk in risks]
-        lines.append(f"| {row['model']} | " + " | ".join(cells) + " |")
+    if native_rows:
+        lines += ["## Guard 原生风险检测", "",
+                  "该轨道把项目 SAFE 与 IRRELEVANT 合并为无风险，只衡量风险是否检出。", "",
+                  "| 模型 | Accuracy | Macro F1 | UNSAFE Recall | 漏检率 | 误拦截率 | INVALID | 平均延迟 | P95 |",
+                  "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
+        for row in native_rows:
+            lines.append(f"| {row['model']} | {_pct(row['accuracy'])} | {_pct(row['macro_f1'])} | "
+                         f"{_pct(row['unsafe_recall'])} | {_pct(row['false_pass_rate'])} | "
+                         f"{_pct(row['false_block_rate'])} | {_pct(row['invalid_rate'])} | "
+                         f"{row['average_latency_ms']:.1f}ms | {row['p95_latency_ms']:.1f}ms |")
+        lines += ["", "### Guard 对项目风险场景的检出率", "",
+                  "这些数值只表示是否检出风险，不表示原生风险代码能映射为项目 risk_type。", "",
+                  "| 模型 | legal | self_harm | harm_others | bypass | dangerous_operation | other |",
+                  "|---|---:|---:|---:|---:|---:|---:|"]
+        for row in native_rows:
+            cells = [_pct(row["risk_types"][risk]["unsafe_recall"]) for risk in risks]
+            lines.append(f"| {row['model']} | " + " | ".join(cells) + " |")
+        lines.append("")
 
-    lines += ["", "## 项目严格三分类", "",
-              "| 模型 | Accuracy | Macro F1 | SAFE R | UNSAFE R | IRRELEVANT R | Risk Acc | INVALID | 平均延迟 | P95 |",
-              "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
-    for row in strict_rows:
-        lines.append(f"| {row['model']} | {_pct(row['accuracy'])} | {_pct(row['macro_f1'])} | "
-                     f"{_pct(row['safe_recall'])} | {_pct(row['unsafe_recall'])} | {_pct(row['irrelevant_recall'])} | "
-                     f"{_pct(row['risk_type_accuracy'])} | {_pct(row['invalid_rate'])} | "
-                     f"{row['average_latency_ms']:.1f}ms | {row['p95_latency_ms']:.1f}ms |")
-    lines += ["", "### 三分类业务指标", "",
-              "| 模型 | 危险漏检 | 安全误拦截 | 噪声误进入 | dangerous_operation R | harm_others R | self_harm R |",
-              "|---|---:|---:|---:|---:|---:|---:|"]
-    for row in strict_rows:
-        b = row["business"]
-        lines.append(f"| {row['model']} | {_pct(b['dangerous_miss_rate'])} | {_pct(b['safe_false_block_rate'])} | "
-                     f"{_pct(b['noise_entry_rate'])} | {_pct(b['dangerous_operation_recall'])} | "
-                     f"{_pct(b['harm_others_recall'])} | {_pct(b['self_harm_recall'])} |")
+    if strict_rows:
+        lines += ["## 项目严格三分类", "",
+                  "| 模型 | Accuracy | Macro F1 | SAFE R | UNSAFE R | IRRELEVANT R | Risk Acc | INVALID | 平均延迟 | P95 |",
+                  "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+        for row in strict_rows:
+            lines.append(f"| {row['model']} | {_pct(row['accuracy'])} | {_pct(row['macro_f1'])} | "
+                         f"{_pct(row['safe_recall'])} | {_pct(row['unsafe_recall'])} | {_pct(row['irrelevant_recall'])} | "
+                         f"{_pct(row['risk_type_accuracy'])} | {_pct(row['invalid_rate'])} | "
+                         f"{row['average_latency_ms']:.1f}ms | {row['p95_latency_ms']:.1f}ms |")
+        lines += ["", "### 三分类业务指标", "",
+                  "| 模型 | 危险漏检 | 安全误拦截 | 噪声误进入 | dangerous_operation R | harm_others R | self_harm R |",
+                  "|---|---:|---:|---:|---:|---:|---:|"]
+        for row in strict_rows:
+            b = row["business"]
+            lines.append(f"| {row['model']} | {_pct(b['dangerous_miss_rate'])} | {_pct(b['safe_false_block_rate'])} | "
+                         f"{_pct(b['noise_entry_rate'])} | {_pct(b['dangerous_operation_recall'])} | "
+                         f"{_pct(b['harm_others_recall'])} | {_pct(b['self_harm_recall'])} |")
 
     lines += ["", "## 部署参数与结果文件", "",
               "| 模型 | max_model_len | GPU利用率 | eager | 结果文件 |", "|---|---:|---:|---:|---|"]
@@ -132,12 +132,14 @@ def main() -> None:
         c = served_to_config[row["model"]]
         lines.append(f"| {row['model']} | {c['max_model_len']} | {c['gpu_memory_utilization']} | "
                      f"{c['enforce_eager']} | `{row['result_file']}` |")
-    lines += ["", "## 结论", "",
-              "- Guard 原生风险检测中，YuFeng 的危险召回和漏检率优于 Qwen3Guard，且延迟显著更低。",
-              "- Qwen3Guard 的主要短板是 dangerous_operation；不能仅凭伤人、自残场景的高召回判断整体效果。",
-              "- 项目三分类中，Qwen2.5-3B 明显优于1.5B，且没有 INVALID；当前是更合适的端到端三分类候选。",
-              "- Qwen2.5-3B 的六类风险归因准确率仍只有约63%，如果业务依赖 risk_type，需要继续优化提示词或增加第二阶段分类器。",
-              "- 不能将 YuFeng 的97%风险二分类准确率与Qwen2.5-3B的92%三分类准确率直接比较，它们解决的任务不同。", ""]
+    lines += ["", "## 结论", ""]
+    if native_rows:
+        best_native = max(native_rows, key=lambda row: (row["unsafe_recall"], -row["false_pass_rate"], row["macro_f1"]))
+        lines.append(f"- Guard 原生风险检测中，本轮危险召回最高的是 `{best_native['model']}`（{_pct(best_native['unsafe_recall'])}）。")
+    if strict_rows:
+        best_strict = max(strict_rows, key=lambda row: (row["macro_f1"], row["accuracy"], -row["invalid_rate"]))
+        lines.append(f"- 项目严格三分类中，本轮 Macro F1 最高的是 `{best_strict['model']}`（{_pct(best_strict['macro_f1'])}）。")
+    lines += ["- Guard 原生风险二分类与项目严格三分类解决的任务不同，不能跨轨直接比较准确率。", ""]
     REPORT.write_text("\n".join(lines), encoding="utf-8")
     print(output)
     print(REPORT)

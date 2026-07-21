@@ -75,3 +75,63 @@ models:
     enforce_eager: true
     native_guard: false
     guard_family: none
+
+  yufeng_xguard_8b:
+    display_name: YuFeng XGuard Reason 8B
+    model_id: Alibaba-AAIG/YuFeng-XGuard-Reason-8B
+    local_path: models/YuFeng-XGuard-Reason-8B
+    served_model_name: yufeng-xguard-reason-8b
+    host: 127.0.0.1
+    port: 8000
+    api_key: local-token
+    dtype: auto
+    max_model_len: 4096
+    gpu_memory_utilization: 0.90
+    enforce_eager: true
+    native_guard: true
+    guard_family: yufeng
+
+  qwen3guard_gen_4b:
+    display_name: Qwen3Guard Gen 4B
+    model_id: Qwen/Qwen3Guard-Gen-4B
+    local_path: models/Qwen3Guard-Gen-4B
+    served_model_name: qwen3guard-gen-4b
+    host: 127.0.0.1
+    port: 8000
+    api_key: local-token
+    dtype: auto
+    max_model_len: 4096
+    gpu_memory_utilization: 0.90
+    enforce_eager: true
+    native_guard: true
+    guard_family: qwen3guard
+
+  qwen3guard_gen_8b:
+    display_name: Qwen3Guard Gen 8B
+    model_id: Qwen/Qwen3Guard-Gen-8B
+    local_path: models/Qwen3Guard-Gen-8B
+    served_model_name: qwen3guard-gen-8b
+    host: 127.0.0.1
+    port: 8000
+    api_key: local-token
+    dtype: auto
+    max_model_len: 4096
+    gpu_memory_utilization: 0.90
+    enforce_eager: true
+    native_guard: true
+    guard_family: qwen3guard
+
+  qwen2_5_7b:
+    display_name: Qwen2.5 7B Instruct
+    model_id: Qwen/Qwen2.5-7B-Instruct
+    local_path: models/Qwen2.5-7B-Instruct
+    served_model_name: qwen2.5-7b-instruct
+    host: 127.0.0.1
+    port: 8000
+    api_key: local-token
+    dtype: auto
+    max_model_len: 4096
+    gpu_memory_utilization: 0.90
+    enforce_eager: true
+    native_guard: false
+    guard_family: none
