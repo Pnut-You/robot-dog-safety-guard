@@ -29,7 +29,7 @@ class ModelConfig(BaseModel):
     gpu_memory_utilization: float = Field(gt=0, le=1)
     enforce_eager: bool = False
     native_guard: bool = False
-    guard_family: Literal["none", "yufeng", "qwen3guard", "llama_guard"] = "none"
+    guard_family: Literal["none", "yufeng", "qwen3guard", "llama_guard", "singguard"] = "none"
 
     @property
     def resolved_local_path(self) -> Path:

@@ -849,7 +849,7 @@ def validate_rows(rows: list[dict[str, Any]], path: Path, require_safety_schema:
 
 def validate_outputs() -> dict[str, Any]:
     errors: list[str] = []
-    files = [REFERENCE, CLEANED, FINAL, MANUAL, FINAL_RAW]
+    files = [REFERENCE, CLEANED, FINAL, MANUAL]
     loaded: dict[Path, list[dict[str, Any]]] = {}
     for path in files:
         try:
@@ -883,10 +883,7 @@ def validate_outputs() -> dict[str, Any]:
         labels_by_text = {r["text"]: r["label"] for r in rows}
         if any(labels_by_text.get(text) != "PASS" for text in required_pass):
             errors.append("安全短句未全部标为 PASS")
-    if FINAL in loaded and FINAL_RAW in loaded and loaded[FINAL] != loaded[FINAL_RAW]:
-        errors.append("processed 与 raw 最终集内容不一致")
-    # The raw final file is a required byte-for-byte mirror, so exclude it from
-    # cross-artifact uniqueness. Other generated artifacts must not reuse IDs.
+    # Generated artifacts must not reuse IDs.
     global_ids: dict[str, str] = {}
     for path in (REFERENCE, CLEANED, MANUAL, FINAL):
         for row in loaded.get(path, []):

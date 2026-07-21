@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 
-from dataset_pipeline import validate_binary_output, validate_outputs
+from dataset_pipeline import validate_outputs
+from generate_guard_binary_dataset import OUTPUT as GUARD_BINARY_OUTPUT, validate as validate_guard_binary_rows
 from generate_multiclass_dataset import OUTPUT as MULTICLASS_OUTPUT, validate as validate_multiclass_rows
 
 if __name__ == "__main__":
@@ -15,5 +16,10 @@ if __name__ == "__main__":
         rows = [json.loads(line) for line in MULTICLASS_OUTPUT.read_text(encoding="utf-8").splitlines() if line.strip()]
         result = validate_multiclass_rows(rows)
     else:
-        result = validate_binary_output() if args.binary else validate_outputs()
+        if args.binary:
+            import json
+            rows = [json.loads(line) for line in GUARD_BINARY_OUTPUT.read_text(encoding="utf-8").splitlines() if line.strip()]
+            result = validate_guard_binary_rows(rows)
+        else:
+            result = validate_outputs()
     print("验证通过：" + ", ".join(f"{k}={v}" for k, v in result.items()))

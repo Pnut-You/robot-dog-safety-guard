@@ -7,7 +7,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app.inference import SafetyDetector
-from app.schemas import MULTICLASS_RISK_TYPES, DatasetItem, MulticlassDatasetItem, PredictionResult
+from app.schemas import DatasetItem, MulticlassDatasetItem, PredictionResult, YUFENG_ALIGNED_RISK_TYPES
 
 
 def load_dataset(path: str | Path) -> list[DatasetItem]:
@@ -48,15 +48,17 @@ def validate_multiclass_contract(items: list[MulticlassDatasetItem]) -> None:
     labels = Counter(item.label for item in items)
     risks = Counter(item.risk_type for item in items if item.label == "UNSAFE")
     difficulties = Counter(item.difficulty for item in items)
-    expected_risks = Counter({"legal_risk": 60, "self_harm": 70, "harm_others": 90,
-                              "safety_bypass": 60, "dangerous_operation": 80, "other_unsafe": 40})
+    expected_risks = Counter({"ps": 55, "ph": 55, "mh": 40, "ti": 40, "pp": 35, "acc": 35,
+                              "ha": 30, "mc": 25, "dw": 30, "pi": 20, "law": 20, "ec": 15})
     errors = []
     if len(items) != 1000:
         errors.append(f"总数应为1000，实际{len(items)}")
     if labels != Counter({"SAFE": 400, "UNSAFE": 400, "IRRELEVANT": 200}):
         errors.append(f"标签分布错误: {dict(labels)}")
-    if risks != expected_risks or set(risks) != MULTICLASS_RISK_TYPES:
+    if risks != expected_risks or set(risks) != YUFENG_ALIGNED_RISK_TYPES:
         errors.append(f"risk_type分布错误: {dict(risks)}")
+    if Counter(item.safety_label for item in items) != Counter({"SAFE": 600, "UNSAFE": 400}):
+        errors.append("safety_label分布错误")
     if difficulties != Counter({"easy": 300, "medium": 400, "hard": 300}):
         errors.append(f"难度分布错误: {dict(difficulties)}")
     if len({item.id for item in items}) != len(items):
@@ -75,13 +77,13 @@ def validate_dataset_contract(items: list[DatasetItem]) -> None:
     errors = []
     if len(items) != 1000:
         errors.append(f"总数应为 1000，实际 {len(items)}")
-    if labels != Counter({"SAFE": 600, "UNSAFE": 400}):
-        errors.append(f"标签分布应为 SAFE=600/UNSAFE=400，实际 {dict(labels)}")
-    if subsets != Counter({"safety_core": 800, "noise_robustness": 200}):
-        errors.append(f"子集分布应为 safety_core=800/noise_robustness=200，实际 {dict(subsets)}")
-    if core != Counter({"SAFE": 400, "UNSAFE": 400}):
-        errors.append(f"核心集应为 SAFE=400/UNSAFE=400，实际 {dict(core)}")
-    if noise != Counter({"SAFE": 200}):
+    if labels != Counter({"SAFE": 500, "UNSAFE": 500}):
+        errors.append(f"标签分布应为 SAFE=500/UNSAFE=500，实际 {dict(labels)}")
+    if subsets != Counter({"safety_core": 900, "noise_robustness": 100}):
+        errors.append(f"子集分布应为 safety_core=900/noise_robustness=100，实际 {dict(subsets)}")
+    if core != Counter({"SAFE": 400, "UNSAFE": 500}):
+        errors.append(f"核心集应为 SAFE=400/UNSAFE=500，实际 {dict(core)}")
+    if noise != Counter({"SAFE": 100}):
         errors.append(f"噪声集必须全部为 SAFE，实际 {dict(noise)}")
     if len({item.id for item in items}) != len(items):
         errors.append("数据集 ID 不唯一")
@@ -158,13 +160,13 @@ def evaluate_native_safety_dataset(items: list[MulticlassDatasetItem], detector:
     width = len(str(total))
     for index, item in enumerate(items, 1):
         result = detector.predict(item.text)
-        expected = "UNSAFE" if item.label == "UNSAFE" else "SAFE"
+        expected = item.safety_label
         print(f"[{index:0{width}d}/{total}] {item.id} | 原标签={item.label} | "
               f"期望风险={expected} | 预测={result.prediction}/{result.risk_category} | "
               f"耗时={result.latency_ms:.1f} ms", flush=True)
         details.append({
             "id": item.id, "text": item.text,
-            "original_label": item.label, "expected": expected,
+            "original_label": item.label, "expected": expected, "expected_guard_label": item.guard_label,
             "predicted": result.prediction, "native_risk_code": result.risk_category,
             "raw_output": result.raw_output, "is_correct": result.prediction == expected,
             "is_invalid": result.prediction == "INVALID", "difficulty": item.difficulty,

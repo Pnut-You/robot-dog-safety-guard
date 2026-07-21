@@ -15,6 +15,8 @@ def test_default_and_named_model_configs():
     assert config.get_model("qwen2_5_1_5b").served_model_name == "qwen2.5-1.5b-instruct"
     assert config.get_model("qwen3guard_gen_0_6b").guard_family == "qwen3guard"
     assert config.get_model("llama_guard_3_1b").guard_family == "llama_guard"
+    assert config.get_model("singguard_2b").model_id == "inclusionAI/SingGuard-2b"
+    assert config.get_model("singguard_2b").guard_family == "singguard"
     assert config.get_model("yufeng_xguard_8b").model_id == "Alibaba-AAIG/YuFeng-XGuard-Reason-8B"
     assert config.get_model("yufeng_xguard_8b").guard_family == "yufeng"
     assert config.get_model("qwen3guard_gen_4b").model_id == "Qwen/Qwen3Guard-Gen-4B"

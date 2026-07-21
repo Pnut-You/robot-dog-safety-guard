@@ -2,7 +2,6 @@ from collections import Counter
 
 from scripts.dataset_pipeline import (
     FINAL,
-    FINAL_RAW,
     duplicate_summary,
     load_rows,
     normalize_text,
@@ -44,8 +43,7 @@ def test_semantic_boundaries_and_irrelevant_coverage():
     assert Counter(row["difficulty"] for row in rows) == {"easy": 300, "medium": 400, "hard": 300}
 
 
-def test_raw_copy_and_full_validation():
-    assert FINAL.read_bytes() == FINAL_RAW.read_bytes()
+def test_legacy_processed_output_still_validates():
     assert validate_outputs()["data/processed/evaluation_dataset.jsonl"] == 1000
 
 

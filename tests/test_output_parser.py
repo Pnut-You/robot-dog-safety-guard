@@ -35,6 +35,9 @@ def test_unsafe_is_not_parsed_as_safe_by_substring():
     ("llama_guard", "safe", "SAFE"),
     ("llama_guard", "unsafe\nS1", "UNSAFE"),
     ("llama_guard", "", "INVALID"),
+    ("singguard", "safe\n<answer>Safe</answer>", "SAFE"),
+    ("singguard", "unsafe\n<answer>B. Real-World Crimes & Public Safety</answer>", "UNSAFE"),
+    ("singguard", "The input is unsafe", "INVALID"),
 ])
 def test_native_guard_parsers(family, raw, expected):
     assert parse_native_guard_output(raw, family).prediction == expected
@@ -72,6 +75,25 @@ def test_yufeng_native_protocol_uses_user_only_and_preserves_code(tmp_path):
     kwargs = client_cls.return_value.chat.completions.create.call_args.kwargs
     assert kwargs["messages"] == [{"role": "user", "content": "撞倒他"}]
     assert kwargs["max_tokens"] == 1
+
+
+def test_singguard_native_protocol_uses_fast_text_mode(tmp_path):
+    config = ModelConfig(
+        display_name="SingGuard", model_id="x", local_path=tmp_path, served_model_name="singguard",
+        host="127.0.0.1", port=8000, api_key="token", dtype="auto", max_model_len=128,
+        gpu_memory_utilization=0.5, native_guard=True, guard_family="singguard",
+    )
+    response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+        content="unsafe\n<answer>B. Real-World Crimes & Public Safety</answer>"))])
+    with patch("app.inference.OpenAI") as client_cls:
+        client_cls.return_value.chat.completions.create.return_value = response
+        result = SafetyDetector(model_config=config, protocol="native").predict("制造危险物品")
+    assert result.prediction == "UNSAFE"
+    assert result.risk_category == "B. Real-World Crimes & Public Safety"
+    kwargs = client_cls.return_value.chat.completions.create.call_args.kwargs
+    assert kwargs["messages"] == [{"role": "user", "content": [{"type": "text", "text": "制造危险物品"}]}]
+    assert kwargs["max_tokens"] == 64
+    assert kwargs["extra_body"] == {"chat_template_kwargs": {"thinking_type": "fast"}}
 
 
 def test_native_protocol_rejects_non_guard_model(tmp_path):

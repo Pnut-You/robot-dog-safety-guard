@@ -48,12 +48,12 @@ def test_rejects_broken_json(tmp_path):
 
 
 def test_binary_dataset_distribution_and_preserved_fields():
-    items = load_dataset(PROJECT_ROOT / "datasets/raw/sample_safety_binary_eval.jsonl")
+    items = load_dataset(PROJECT_ROOT / "datasets/raw/sample_guard_safety_binary_eval.jsonl")
     assert len(items) == 1000
     assert len({item.id for item in items}) == 1000
-    assert Counter(item.label for item in items) == {"SAFE": 600, "UNSAFE": 400}
-    assert Counter(item.eval_subset for item in items) == {"safety_core": 800, "noise_robustness": 200}
-    assert Counter(item.label for item in items if item.eval_subset == "safety_core") == {"SAFE": 400, "UNSAFE": 400}
+    assert Counter(item.label for item in items) == {"SAFE": 500, "UNSAFE": 500}
+    assert Counter(item.eval_subset for item in items) == {"safety_core": 900, "noise_robustness": 100}
+    assert Counter(item.label for item in items if item.eval_subset == "safety_core") == {"SAFE": 400, "UNSAFE": 500}
     assert all(item.label == "SAFE" for item in items if item.eval_subset == "noise_robustness")
     assert all(item.risk_type for item in items if item.original_label == "BLOCK")
     assert all(item.irrelevant_type for item in items if item.original_label == "IRRELEVANT")

@@ -46,6 +46,21 @@ models:
     native_guard: true
     guard_family: llama_guard
 
+  singguard_2b:
+    display_name: SingGuard 2B
+    model_id: inclusionAI/SingGuard-2b
+    local_path: models/SingGuard-2b
+    served_model_name: singguard-2b
+    host: 127.0.0.1
+    port: 8000
+    api_key: local-token
+    dtype: auto
+    max_model_len: 4096
+    gpu_memory_utilization: 0.80
+    enforce_eager: true
+    native_guard: true
+    guard_family: singguard
+
   qwen2_5_1_5b:
     display_name: Qwen2.5 1.5B Instruct
     model_id: Qwen/Qwen2.5-1.5B-Instruct

@@ -55,20 +55,29 @@ MULTICLASS_RISK_TYPES = {
     "dangerous_operation", "other_unsafe",
 }
 
+YUFENG_ALIGNED_RISK_TYPES = {
+    "ps", "ph", "mh", "ti", "pp", "acc", "ha", "mc", "dw", "pi", "law", "ec",
+}
+
 
 class MulticlassDatasetItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str = Field(min_length=1)
     text: str = Field(min_length=1)
     label: Literal["SAFE", "UNSAFE", "IRRELEVANT"]
+    safety_label: Literal["SAFE", "UNSAFE"]
     risk_type: str | None = None
+    guard_label: str = Field(min_length=1)
     difficulty: Literal["easy", "medium", "hard"]
     source: Literal["synthetic_reviewed"]
 
     @model_validator(mode="after")
     def validate_risk_type(self) -> "MulticlassDatasetItem":
-        if self.label == "UNSAFE" and self.risk_type not in MULTICLASS_RISK_TYPES:
-            raise ValueError("UNSAFE 样本必须填写合法 risk_type")
-        if self.label != "UNSAFE" and self.risk_type is not None:
-            raise ValueError("SAFE/IRRELEVANT 的 risk_type 必须为 null")
+        if self.label == "UNSAFE":
+            if self.safety_label != "UNSAFE":
+                raise ValueError("UNSAFE 路由标签必须映射为 safety_label=UNSAFE")
+            if self.risk_type not in YUFENG_ALIGNED_RISK_TYPES or self.guard_label != self.risk_type:
+                raise ValueError("UNSAFE 必须填写一致且合法的 YuFeng risk_type/guard_label")
+        elif self.safety_label != "SAFE" or self.risk_type is not None or self.guard_label != "sec":
+            raise ValueError("SAFE/IRRELEVANT 必须映射为 safety_label=SAFE、risk_type=null、guard_label=sec")
         return self

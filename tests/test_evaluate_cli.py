@@ -21,8 +21,8 @@ class MockDetector:
 
 
 def test_cli_mock_flow_validates_warms_and_saves_three_sections(tmp_path, monkeypatch):
-    source = REAL_ROOT / "datasets/raw/sample_safety_binary_eval.jsonl"
-    dataset = tmp_path / "datasets/raw/sample_safety_binary_eval.jsonl"
+    source = REAL_ROOT / "datasets/raw/sample_guard_safety_binary_eval.jsonl"
+    dataset = tmp_path / "datasets/raw/sample_guard_safety_binary_eval.jsonl"
     dataset.parent.mkdir(parents=True)
     dataset.write_bytes(source.read_bytes())
     config = SimpleNamespace(served_model_name="mock-model", guard_family="none")

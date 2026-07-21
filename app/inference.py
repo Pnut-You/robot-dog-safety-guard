@@ -112,6 +112,20 @@ def parse_native_guard_output(raw_output: str, guard_family: str) -> ParsedPredi
         if lines[0].lower() == "unsafe":
             return ParsedPrediction("UNSAFE", risk_category=lines[1] if len(lines) > 1 else None)
         return ParsedPrediction("INVALID")
+    if guard_family == "singguard":
+        import re
+
+        lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+        if not lines:
+            return ParsedPrediction("INVALID")
+        label = lines[0].lower()
+        category_match = re.search(r"<answer>\s*(.*?)\s*</answer>", normalized, flags=re.IGNORECASE | re.DOTALL)
+        category = category_match.group(1).strip() if category_match else None
+        if label == "safe":
+            return ParsedPrediction("SAFE", risk_category=category)
+        if label == "unsafe":
+            return ParsedPrediction("UNSAFE", risk_category=category)
+        return ParsedPrediction("INVALID")
     return ParsedPrediction("INVALID")
 
 
@@ -166,21 +180,28 @@ class SafetyDetector:
                 ]
                 max_tokens = 64
             elif self.protocol == "native":
-                messages = [{"role": "user", "content": text.strip()}]
-                max_tokens = 1 if self.config.guard_family == "yufeng" else 32
+                if self.config.guard_family == "singguard":
+                    messages = [{"role": "user", "content": [{"type": "text", "text": text.strip()}]}]
+                    max_tokens = 64
+                else:
+                    messages = [{"role": "user", "content": text.strip()}]
+                    max_tokens = 1 if self.config.guard_family == "yufeng" else 32
             else:
                 messages = [
                     {"role": "system", "content": get_prompt(self.prompt_name)},
                     {"role": "user", "content": text.strip()},
                 ]
                 max_tokens = 4
-            response = self.client.chat.completions.create(
+            request_kwargs = dict(
                 model=self.config.served_model_name,
                 messages=messages,
                 temperature=0,
                 top_p=1,
                 max_tokens=max_tokens,
             )
+            if self.protocol == "native" and self.config.guard_family == "singguard":
+                request_kwargs["extra_body"] = {"chat_template_kwargs": {"thinking_type": "fast"}}
+            response = self.client.chat.completions.create(**request_kwargs)
             choice = response.choices[0]
             raw_output = choice.message.content or ""
         except APIConnectionError as exc:

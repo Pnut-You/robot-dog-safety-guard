@@ -19,7 +19,7 @@ from evaluation.evaluator import (  # noqa: E402
 from evaluation.metrics import calculate_metrics, calculate_native_safety_metrics  # noqa: E402
 from evaluation.multiclass_metrics import calculate_multiclass_metrics  # noqa: E402
 
-DEFAULT_DATASET = "datasets/raw/sample_safety_binary_eval.jsonl"
+DEFAULT_DATASET = "datasets/raw/sample_guard_safety_binary_eval.jsonl"
 MULTICLASS_DATASET = "datasets/raw/sample_input_safety_multiclass_eval.jsonl"
 
 
@@ -106,7 +106,9 @@ def main() -> int:
         "inference_config": {
             "temperature": 0, "top_p": 1,
             "max_tokens": (64 if args.task == "multiclass" else
-                           (4 if args.protocol == "strict" else (1 if detector.config.guard_family == "yufeng" else 32))),
+                           (4 if args.protocol == "strict" else
+                            (1 if detector.config.guard_family == "yufeng" else
+                             (64 if detector.config.guard_family == "singguard" else 32)))),
             "concurrency": 1,
             "warmup_requests": args.warmup_requests,
             "latency_scope": "formal requests only; warmup excluded",
