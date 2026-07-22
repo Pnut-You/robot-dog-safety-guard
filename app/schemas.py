@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.yufeng_taxonomy import SELECTED_EVAL_RISKS
+
 
 class PredictionResult(BaseModel):
     text: str
@@ -50,14 +52,7 @@ class DatasetItem(BaseModel):
         return self
 
 
-MULTICLASS_RISK_TYPES = {
-    "legal_risk", "self_harm", "harm_others", "safety_bypass",
-    "dangerous_operation", "other_unsafe",
-}
-
-YUFENG_ALIGNED_RISK_TYPES = {
-    "ps", "ph", "mh", "ti", "pp", "acc", "ha", "mc", "dw", "pi", "law", "ec",
-}
+YUFENG_ALIGNED_RISK_TYPES = set(SELECTED_EVAL_RISKS)
 
 
 class MulticlassDatasetItem(BaseModel):

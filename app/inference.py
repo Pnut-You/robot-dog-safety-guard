@@ -8,7 +8,9 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
 from app.config import ModelConfig, get_model_config
 from app.prompts import get_multiclass_prompt, get_prompt
-from app.schemas import MULTICLASS_RISK_TYPES, PredictionResult
+from app.schemas import PredictionResult
+from app.yufeng_taxonomy import YUFENG_UNSAFE_CODES
+
 
 @dataclass(frozen=True)
 class ParsedPrediction:
@@ -40,42 +42,16 @@ def parse_prediction(raw_output: str) -> str:
 
 
 def parse_multiclass_output(raw_output: str) -> ParsedPrediction:
-    """Parse the project JSON contract while preserving a valid primary label."""
-    import json
-
-    try:
-        value = json.loads(raw_output.strip())
-    except (json.JSONDecodeError, TypeError):
-        return ParsedPrediction("INVALID", format_valid=False, parse_error="输出不是合法 JSON")
-    if not isinstance(value, dict):
-        return ParsedPrediction("INVALID", format_valid=False, parse_error="JSON 顶层必须是对象")
-    label_value = value.get("label")
-    if not isinstance(label_value, str):
-        return ParsedPrediction("INVALID", format_valid=False, parse_error="缺少合法 label")
-    label = label_value.strip().upper()
-    if label not in {"SAFE", "UNSAFE", "IRRELEVANT"}:
-        return ParsedPrediction("INVALID", format_valid=False, parse_error="label 非法")
-
-    errors: list[str] = []
-    if set(value) != {"label", "risk_type"}:
-        errors.append("字段必须且只能包含 label 和 risk_type")
-    risk = value.get("risk_type")
-    normalized_risk = risk.strip().lower() if isinstance(risk, str) else None
-    if label == "UNSAFE":
-        if normalized_risk not in MULTICLASS_RISK_TYPES:
-            errors.append("UNSAFE 缺少合法 risk_type")
-            normalized_risk = None
-    elif risk is not None:
-        errors.append("SAFE/IRRELEVANT 的 risk_type 必须为 null")
-        normalized_risk = None
-    return ParsedPrediction(label, risk_category=normalized_risk, format_valid=not errors,
-                            parse_error="；".join(errors) or None)
+    """Parse one exact YuFeng taxonomy code produced by a prompted general model."""
+    code = raw_output.strip().lower()
+    if code == "sec":
+        return ParsedPrediction("SAFE", risk_category=code)
+    if code in YUFENG_UNSAFE_CODES:
+        return ParsedPrediction("UNSAFE", risk_category=code)
+    return ParsedPrediction("INVALID", format_valid=False, parse_error="输出不是合法的 YuFeng 类别代码")
 
 
-YUFENG_RISK_CODES = {
-    "pc", "dc", "dw", "pi", "ec", "ac", "def", "ti", "cy", "ph", "mh", "se", "sci",
-    "pp", "cs", "acc", "mc", "ha", "ps", "ter", "sd", "ext", "fin", "med", "law", "cm", "ma", "md",
-}
+YUFENG_RISK_CODES = set(YUFENG_UNSAFE_CODES)
 
 
 def parse_native_guard_output(raw_output: str, guard_family: str) -> ParsedPrediction:
@@ -87,7 +63,7 @@ def parse_native_guard_output(raw_output: str, guard_family: str) -> ParsedPredi
             return ParsedPrediction("SAFE", risk_category="sec")
         if code in YUFENG_RISK_CODES:
             return ParsedPrediction("UNSAFE", risk_category=code)
-        return ParsedPrediction("INVALID")
+        return ParsedPrediction("INVALID", format_valid=False, parse_error="YuFeng 输出不是合法类别代码")
     if guard_family == "qwen3guard":
         lines = [line.strip() for line in normalized.splitlines() if line.strip()]
         if not lines:
@@ -160,8 +136,12 @@ class SafetyDetector:
         self.prompt_name = prompt_name
         self.protocol = protocol
         self.task = task
-        if task == "multiclass" and protocol != "strict":
-            raise ValueError("多分类任务只支持 strict JSON 协议")
+        if task == "multiclass" and self.config.guard_family == "yufeng" and protocol != "native":
+            raise ValueError("YuFeng 多分类必须使用 native 协议")
+        if task == "multiclass" and protocol == "native" and self.config.guard_family != "yufeng":
+            raise ValueError("YuFeng 多分类 native 协议只支持 YuFeng 模型")
+        if task == "multiclass" and self.config.native_guard and self.config.guard_family != "yufeng":
+            raise ValueError("YuFeng 标签空间 strict 协议只支持通用指令模型")
         if protocol == "native" and not self.config.native_guard:
             raise ValueError(f"模型 {self.config.served_model_name} 不支持 native Guard 协议")
         self.client = OpenAI(base_url=self.config.base_url, api_key=self.config.effective_api_key, timeout=timeout)
@@ -173,12 +153,15 @@ class SafetyDetector:
         raw_output = ""
         error: str | None = None
         try:
-            if self.task == "multiclass":
+            if self.task == "multiclass" and self.protocol == "native":
+                messages = [{"role": "user", "content": text.strip()}]
+                max_tokens = 1
+            elif self.task == "multiclass":
                 messages = [
                     {"role": "system", "content": get_multiclass_prompt(self.prompt_name)},
                     {"role": "user", "content": text.strip()},
                 ]
-                max_tokens = 64
+                max_tokens = 4
             elif self.protocol == "native":
                 if self.config.guard_family == "singguard":
                     messages = [{"role": "user", "content": [{"type": "text", "text": text.strip()}]}]
@@ -216,7 +199,8 @@ class SafetyDetector:
 
     def _result(self, text: str, raw: str, latency: float, error: str | None) -> PredictionResult:
         if self.task == "multiclass":
-            parsed = parse_multiclass_output(raw)
+            parsed = (parse_native_guard_output(raw, self.config.guard_family)
+                      if self.protocol == "native" else parse_multiclass_output(raw))
         else:
             parsed = (parse_native_guard_output(raw, self.config.guard_family)
                       if self.protocol == "native" else parse_guard_output(raw))

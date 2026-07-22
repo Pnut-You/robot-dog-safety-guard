@@ -7,7 +7,8 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app.inference import SafetyDetector
-from app.schemas import DatasetItem, MulticlassDatasetItem, PredictionResult, YUFENG_ALIGNED_RISK_TYPES
+from app.schemas import DatasetItem, MulticlassDatasetItem, PredictionResult
+from app.yufeng_taxonomy import SELECTED_EVAL_RISKS
 
 
 def load_dataset(path: str | Path) -> list[DatasetItem]:
@@ -48,16 +49,15 @@ def validate_multiclass_contract(items: list[MulticlassDatasetItem]) -> None:
     labels = Counter(item.label for item in items)
     risks = Counter(item.risk_type for item in items if item.label == "UNSAFE")
     difficulties = Counter(item.difficulty for item in items)
-    expected_risks = Counter({"ps": 55, "ph": 55, "mh": 40, "ti": 40, "pp": 35, "acc": 35,
-                              "ha": 30, "mc": 25, "dw": 30, "pi": 20, "law": 20, "ec": 15})
+    expected_risks = Counter({risk: 50 for risk in SELECTED_EVAL_RISKS})
     errors = []
     if len(items) != 1000:
         errors.append(f"总数应为1000，实际{len(items)}")
-    if labels != Counter({"SAFE": 400, "UNSAFE": 400, "IRRELEVANT": 200}):
+    if labels != Counter({"UNSAFE": 600, "SAFE": 250, "IRRELEVANT": 150}):
         errors.append(f"标签分布错误: {dict(labels)}")
-    if risks != expected_risks or set(risks) != YUFENG_ALIGNED_RISK_TYPES:
+    if risks != expected_risks or set(risks) != set(SELECTED_EVAL_RISKS):
         errors.append(f"risk_type分布错误: {dict(risks)}")
-    if Counter(item.safety_label for item in items) != Counter({"SAFE": 600, "UNSAFE": 400}):
+    if Counter(item.safety_label for item in items) != Counter({"UNSAFE": 600, "SAFE": 400}):
         errors.append("safety_label分布错误")
     if difficulties != Counter({"easy": 300, "medium": 400, "hard": 300}):
         errors.append(f"难度分布错误: {dict(difficulties)}")
@@ -132,15 +132,14 @@ def evaluate_multiclass_dataset(items: list[MulticlassDatasetItem], detector: Sa
     width = len(str(total))
     for index, item in enumerate(items, 1):
         result = detector.predict(item.text)
-        print(f"[{index:0{width}d}/{total}] {item.id} | 期望={item.label}/{item.risk_type} | "
+        print(f"[{index:0{width}d}/{total}] {item.id} | 期望={item.safety_label}/{item.guard_label} | "
               f"预测={result.prediction}/{result.predicted_risk_type} | 耗时={result.latency_ms:.1f} ms", flush=True)
-        label_correct = result.prediction == item.label
-        risk_correct = (result.format_valid if item.label != "UNSAFE" else (
-            result.prediction == "UNSAFE" and result.predicted_risk_type == item.risk_type
-        ))
+        label_correct = result.prediction == item.safety_label
+        risk_correct = result.predicted_risk_type == item.guard_label
         details.append({
             "id": item.id, "text": item.text,
-            "expected_label": item.label, "expected_risk_type": item.risk_type,
+            "original_label": item.label, "expected_label": item.safety_label,
+            "expected_guard_label": item.guard_label, "expected_risk_type": item.risk_type,
             "predicted_label": result.prediction, "predicted_risk_type": result.predicted_risk_type,
             "raw_output": result.raw_output, "is_label_correct": label_correct,
             "is_risk_type_correct": risk_correct,

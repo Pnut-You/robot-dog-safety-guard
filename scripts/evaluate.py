@@ -41,7 +41,7 @@ def _print_binary_metrics(title: str, metrics: dict) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="评测第一阶段机器狗输入安全二分类模型")
+    parser = argparse.ArgumentParser(description="评测机器狗输入安全模型")
     parser.add_argument("--task", choices=["binary", "multiclass", "native_safety"], default="binary")
     parser.add_argument("--dataset", help="JSONL 数据集路径；省略时按 task 选择默认数据集")
     parser.add_argument("--model", help="models.yaml 中的模型键；默认使用 active_model")
@@ -87,14 +87,15 @@ def main() -> int:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", detector.config.served_model_name)
     if args.task == "multiclass":
-        output_path = PROJECT_ROOT / "results" / "input_safety_multiclass" / f"{safe_name}_sample_input_safety_multiclass_eval_{timestamp}.json"
+        output_path = (PROJECT_ROOT / "results" / "input_safety_multiclass" /
+                       f"{safe_name}_sample_input_safety_multiclass_eval_{args.protocol}_{timestamp}.json")
     elif args.task == "native_safety":
         output_path = PROJECT_ROOT / "results" / "native_safety" / f"{safe_name}_sample_input_safety_multiclass_eval_native_{timestamp}.json"
     else:
         output_path = PROJECT_ROOT / "results" / f"{safe_name}_binary_safety_{args.protocol}_{timestamp}.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "evaluation_protocol": ("input_safety_multiclass_v1" if args.task == "multiclass" else
+        "evaluation_protocol": (f"yufeng_taxonomy_v2_{args.protocol}" if args.task == "multiclass" else
                                 ("native_safety_detection_v1" if args.task == "native_safety" else
                                  f"binary_safety_v1_{args.protocol}")),
         "task": args.task,
@@ -105,7 +106,7 @@ def main() -> int:
         "dataset_sha256": hashlib.sha256(dataset_path.read_bytes()).hexdigest(),
         "inference_config": {
             "temperature": 0, "top_p": 1,
-            "max_tokens": (64 if args.task == "multiclass" else
+            "max_tokens": ((1 if args.protocol == "native" else 4) if args.task == "multiclass" else
                            (4 if args.protocol == "strict" else
                             (1 if detector.config.guard_family == "yufeng" else
                              (64 if detector.config.guard_family == "singguard" else 32)))),
@@ -119,13 +120,15 @@ def main() -> int:
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     if args.task == "multiclass":
-        print("\n输入安全多分类结果")
+        print("\nYuFeng 原生标签空间评测结果")
         for key in ("total", "overall_accuracy", "macro_precision", "macro_recall", "macro_f1",
                     "invalid_count", "invalid_rate", "format_error_count", "average_latency_ms", "p95_latency_ms"):
             print(f"{key}: {metrics[key]}")
-        for label, values in metrics["classes"].items():
-            print(f"{label}: {values}")
-        print(f"risk_type Accuracy: {metrics['risk_type']['accuracy']}")
+        print(f"风险检测: {metrics['risk_detection']}")
+        print(f"UNSAFE 风险代码 Accuracy: {metrics['risk_type']['accuracy']}")
+        print(f"UNSAFE 风险代码 Macro F1: {metrics['risk_type']['macro_f1']}")
+        for risk, values in metrics["risk_type"]["classes"].items():
+            print(f"  {risk}: {values}")
         print(f"业务指标: {metrics['business']}")
         print(f"\n详细结果: {output_path}")
         return 0
